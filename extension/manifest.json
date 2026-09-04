@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "CookieJar",
+  "version": "1.0",
+  "description": "An extension to read, edit cookies, scan downloads and display trust levels",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "CookieJar@Linkernel0x",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+
+  "icons": {
+    "48": "assets/icon.svg",
+    "96": "assets/icon.svg",
+    "128": "assets/icon.svg"
+  },
+
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "CookieJar"
+  },
+
+  "permissions": [
+    "cookies",
+    "webNavigation",
+    "downloads",
+    "storage",
+    "notifications",
+    "activeTab",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "<all_urls>"
+  ],
+
+  "background": {
+    "scripts": ["background/profile.js", "background/background.js"]
+  }
+}

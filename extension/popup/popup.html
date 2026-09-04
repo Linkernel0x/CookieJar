@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div class="card">
+    <span class="card-title">Trust Level</span>
+    <span id="trust-level" class="status-badge">Loading...</span>
+</div>
+<details class="card" style="display: block; cursor: pointer; margin-bottom: 12px;">
+    <summary style="font-size: 0.85rem; color: #a6adc8;">External Scan Reports</summary>
+    <ul id="trust-scores" style="padding-left: 16px; margin: 8px 0 0 0; font-size: 0.85rem;">
+        <!-- -->
+    </ul>
+</details>
+
+<div class="card">
+    <span class="card-title">Cookies</span>
+    <span id="cookie-count" style="font-weight: bold;">0</span>
+</div>
+
+<details class="card" style="display: block; cursor: pointer; margin-bottom: 12px;">
+    <summary style="font-size: 0.85rem; color: #a6adc8;">External Scan Reports</summary>
+    <ul id="external-links" style="padding-left: 16px; margin: 8px 0 0 0; font-size: 0.85rem;">
+        <!-- -->
+    </ul>
+</details>
+
+<button id="reload" class="btn secondary"><i class="fa-solid fa-rotate"></i> Refetch data</button>
+<button id="open-dashboard" class="btn primary">Open Dashboard</button>
+
+<script src="../background/profile.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

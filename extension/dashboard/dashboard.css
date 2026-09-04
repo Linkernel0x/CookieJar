@@ -1,0 +1,109 @@
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css');
+
+:root {
+    --bg-base: #1e1e2e;
+    --bg-surface: #181825;
+    --bg-card: #313244;
+    --bg-input: #45475a;
+    --text-main: #cdd6f4;
+    --text-muted: #a6adc8;
+    --accent-blue: #89b4fa;
+    --accent-red: #f38ba8;
+    --accent-orange: #fab387;
+    --accent-green: #a6e3a1;
+    --accent-grey: #6c7086;
+    --border-radius: 10px;
+}
+
+body {
+    font-family: 'Segoe UI', Roboto, -apple-system, sans-serif;
+    padding: 32px;
+    background: var(--bg-surface);
+    color: var(--text-main);
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+h1 {
+    color: var(--accent-blue);
+    font-size: 1.8rem;
+    margin-bottom: 24px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.card {
+    background: var(--bg-card);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    margin-bottom: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Griglia per le opzioni */
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 12px;
+}
+
+.setting-card {
+    background: var(--bg-surface);
+    padding: 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.btn {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn.primary {
+    background: var(--accent-blue);
+    color: #11111b;
+}
+
+.btn.primary:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+.btn.crucial {
+    background: var(--accent-red);
+    color: #11111b;
+}
+
+.btn.crucial:hover {
+    filter: brightness(1.1);
+}
+
+/* Form & Inputs */
+input[type="text"] {
+    width: 100%;
+    padding: 8px 12px;
+    margin-top: 6px;
+    border-radius: 6px;
+    border: 1px solid #585b70;
+    background: var(--bg-input);
+    color: var(--text-main);
+    box-sizing: border-box;
+}
+
+input[type="checkbox"] {
+    accent-color: var(--accent-blue);
+    transform: scale(1.1);
+    cursor: pointer;
+}

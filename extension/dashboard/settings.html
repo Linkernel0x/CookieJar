@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CookieJar Security Suite - Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <button class="btn primary" id="open-dashboard"><i class="fa-solid fa-arrow-left"></i> Go back</button>
+    <button class="btn crucial" id="wipe"><i class="fa-solid fa-trash-can"></i> Wipe database</button>
+
+    <h1>CookieJar Settings</h1>
+    <div class="card">
+        <h3>Miscellaneous</h3>
+        <div id="misc-settings">Loading content...</div>
+    </div>
+    <div class="card">
+        <h3>Trust Settings</h3>
+        <div id="trust-settings" class="card-list">Loading content...</div>
+    </div>
+
+    <script src="../background/profile.js"></script>
+    <script src="settings.js"></script>
+</body>
+</html>
