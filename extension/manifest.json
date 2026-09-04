@@ -40,6 +40,10 @@
   ],
 
   "background": {
-    "scripts": ["background/profile.js", "background/background.js"]
+    "scripts": [
+      "background/profile.js",
+      "background/helpers.js",
+      "background/background.js"
+    ]
   }
 }
