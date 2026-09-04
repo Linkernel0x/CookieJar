@@ -16,19 +16,26 @@ browser.runtime.onInstalled.addListener(async () => {
 
 browser.downloads.onCreated.addListener(async (downloadItem) => {
     try {
-        await browser.downloads.pause(downloadItem.id);
+        const storage = await browser.storage.local.get("CookieJar");
+        const settings = storage.CookieJar?.settings?.virustotal || {};
 
-        console.log(`[CookieJar] Download intercepted: ${downloadItem.filename} (${downloadItem.url})`);
+        if (!settings.downloadScan?.enabled) return;
 
-        const isSafe = await checkVirusTotal(downloadItem.url);
+        const apiKey = settings.downloadScan?.apiKey || settings.globalApiKey;
+        if (!apiKey) return;
 
-        if (!isSafe) {
+        const isSafe = await checkDownloadUrlSafety(downloadItem.url, apiKey);
+        const minResults = settings.downloadScan?.minimumResults || 1;
+
+        if (isSafe !== null && isSafe >= minResults) {
             await browser.downloads.cancel(downloadItem.id);
             await browser.downloads.erase({ id: downloadItem.id });
+
             browser.notifications.create({
                 type: "basic",
-                title: "CookieJar",
-                message: `Blocked download: ${downloadItem.filename}`
+                iconUrl: "icons/icon-48.png",
+                title: "CookieJar - Download Bloccato",
+                message: `File malevolo intercettato: ${downloadItem.filename}`
             });
         }
     } catch (error) {
@@ -36,8 +43,26 @@ browser.downloads.onCreated.addListener(async (downloadItem) => {
     }
 });
 
-async function checkVirusTotal(downloadItem) {
-    //TODO
+async function checkDownloadUrlSafety(downloadUrl, apiKey) {
+    try {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(downloadUrl);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const urlId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+        const response = await fetch(`https://www.virustotal.com/api/v3/urls/${urlId}`, {
+            method: "GET",
+            headers: { "x-apikey": apiKey }
+        });
+
+        if (!response.ok) return null;
+
+        const result = await response.json();
+        return result.data?.attributes?.last_analysis_stats?.malicious || 0;
+    } catch {
+        return null;
+    }
 }
 
 browser.webNavigation.onCompleted.addListener(async (details) => {

@@ -1,11 +1,13 @@
 document.addEventListener("DOMContentLoaded", async () => {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
 
-    if (tab && tab.url && tab.url.startsWith("http")) {
+    const isValidHttp = tab && tab.url && tab.url.startsWith("http");
+
+    if (isValidHttp) {
         try {
             const url = new URL(tab.url);
 
-            const cookies = await browser.cookies.getAll({ domain: url.hostname });
+            const cookies = await browser.cookies.getAll({domain: url.hostname});
             const sessionCookies = cookies.filter(c => c.session).length;
             const persistentCookies = cookies.length - sessionCookies;
 
@@ -13,32 +15,41 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.getElementById("cookie-breakdown").textContent = `Session: ${sessionCookies} | Persistent: ${persistentCookies}`;
 
             await updateTrustLevel(url.hostname);
+
         } catch (e) {
+            console.error(e);
             document.getElementById("trust-level").textContent = "N/A";
         }
     } else {
         document.getElementById("trust-level").textContent = "N/A";
     }
 
-    const links = generateExternalReportLinks(tab.url);
-    const linksContainer = document.getElementById("external-links");
-    if (linksContainer && tab.url.startsWith("http")) {
-        linksContainer.innerHTML = `
-        <li><a href="${links.googleTransparency}" target="_blank" style="color: var(--accent-blue)">Google Transparency</a></li>
-        <li><a href="${links.urlhaus}" target="_blank" style="color: var(--accent-blue)">URLhaus Report</a></li>
-        <li><a href="${links.sucuri}" target="_blank" style="color: var(--accent-blue)">Sucuri SiteCheck</a></li>
-        `;
-    }
-
-    document.getElementById("reload").addEventListener("click", async () => {
-        if (tab.url.startsWith("http")) {
+    document.getElementById("reload")?.addEventListener("click", async () => {
+        if (isValidHttp) {
             await forceTrustFetch(tab);
             window.location.reload();
         }
     });
 
-    document.getElementById("open-dashboard").addEventListener("click", () => {
-        browser.tabs.create({url: "../dashboard/index.html"});
+    document.getElementById("open-cookies")?.addEventListener("click", async () => {
+        const [currentTab] = await browser.tabs.query({ active: true, currentWindow: true });
+        let domainQuery = "";
+
+        if (currentTab && currentTab.url && currentTab.url.startsWith("http")) {
+            const url = new URL(currentTab.url);
+            domainQuery = `?domain=${encodeURIComponent(url.hostname)}`;
+        }
+
+        browser.windows.create({
+            url: browser.runtime.getURL(`popup/cookies.html${domainQuery}`),
+            type: "popup",
+            width: 600,
+            height: 400
+        });
+    });
+
+    document.getElementById("open-dashboard")?.addEventListener("click", () => {
+        browser.tabs.create({ url: browser.runtime.getURL("dashboard/index.html") });
     });
 });
 
@@ -80,6 +91,7 @@ async function updateTrustLevel(hostname) {
         <li>OpenPhish: <span style="color: #a6adc8; float: right">${value.sources.openPhish === null ? '--' : (value.sources.openPhish ? 'Malicious' : 'Safe')}</span></li>
         <li>Tranco Rank: <span style="color: #a6adc8; float: right">${value.sources.trancoRank === null ? '--' : value.sources.trancoRank}</span></li>
         <li>Domain Age: <span style="color: #a6adc8; float: right">${(value.sources.domainAgeDays !== 'N/A' && value.sources.domainAgeDays !== null) ? value.sources.domainAgeDays + ' days' : 'N/A'}</span></li>
+        <li>VirusTotal: <span style="color: #a6adc8; float: right">${value.sources.virusTotal === null ? '--' : value.sources.virusTotal}</span></li>
         <li style="margin-top: 8px; font-style: italic;">Updated: ${formattedTime}</li>
         `;
     }
@@ -108,14 +120,4 @@ async function forceTrustFetch(tab) {
 async function getCurrentTabId() {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     return tab.id;
-}
-
-function generateExternalReportLinks(targetUrl) {
-    if (!targetUrl) return {};
-    const encodedUrl = encodeURIComponent(targetUrl);
-    return {
-        sucuri: `https://sitecheck.sucuri.net/?scan=${encodedUrl}`,
-        googleTransparency: `https://transparencyreport.google.com/safe-browsing/search?url=${encodedUrl}`,
-        urlhaus: `https://urlhaus.abuse.ch/browse.php?search=${encodedUrl}`
-    };
 }

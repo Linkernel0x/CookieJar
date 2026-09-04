@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const data = await browser.storage.local.get("CookieJar");
     await loadMisc(data);
     await loadTrustSettings(data);
+    await loadVirusTotalSettings(data);
 });
 
 async function loadMisc(data) {
@@ -84,7 +85,6 @@ async function loadTrustSettings(data) {
 
         row.appendChild(title);
         row.appendChild(labelEnabled);
-
         if (value.apiKey !== undefined) {
             const inputLabel = document.createElement("label");
             inputLabel.textContent = "API Key:";
@@ -111,4 +111,125 @@ async function loadTrustSettings(data) {
             await browser.storage.local.set({ CookieJar: profile.toJSON() });
         });
     });
+}
+
+async function loadVirusTotalSettings(data) {
+    const profile = Profile.fromJSON(data.CookieJar);
+    const vtContainer = document.getElementById("virustotal-settings");
+    if (!vtContainer) return;
+
+    vtContainer.innerHTML = "";
+    const vtSettings = profile.settings.virustotal;
+
+    const globalCard = document.createElement("div");
+    globalCard.className = "setting-card";
+
+    const globalTitle = document.createElement("b");
+    globalTitle.textContent = "Global Settings";
+    globalTitle.style.display = "block";
+    globalTitle.style.marginBottom = "8px";
+    globalTitle.style.color = "var(--accent-blue)";
+
+    const globalLabel = document.createElement("label");
+    globalLabel.textContent = "Global API Key (Fallback):";
+    globalLabel.style.fontSize = "0.9rem";
+
+    const globalInput = document.createElement("input");
+    globalInput.type = "text";
+    globalInput.value = vtSettings.globalApiKey || "";
+    globalInput.placeholder = "Enter main VirusTotal Key...";
+
+    globalLabel.appendChild(globalInput);
+    globalCard.appendChild(globalTitle);
+    globalCard.appendChild(globalLabel);
+    vtContainer.appendChild(globalCard);
+
+    globalInput.addEventListener("change", async (e) => {
+        profile.settings.virustotal.globalApiKey = e.target.value.trim();
+        await browser.storage.local.set({ CookieJar: profile.toJSON() });
+    });
+
+    const trustCard = createVtSubCard("Trust Level Evaluation", vtSettings.trustLevel, async (updatedData) => {
+        profile.settings.virustotal.trustLevel = updatedData;
+        await browser.storage.local.set({ CookieJar: profile.toJSON() });
+    });
+    vtContainer.appendChild(trustCard);
+
+    const downloadCard = createVtSubCard("Download Protection", vtSettings.downloadScan, async (updatedData) => {
+        profile.settings.virustotal.downloadScan = updatedData;
+        await browser.storage.local.set({ CookieJar: profile.toJSON() });
+    }, true);
+
+    vtContainer.appendChild(downloadCard);
+}
+
+function createVtSubCard(titleText, configObj, saveCallback, includeMinResults = false) {
+    const card = document.createElement("div");
+    card.className = "setting-card";
+
+    const title = document.createElement("b");
+    title.textContent = titleText;
+    title.style.display = "block";
+    title.style.marginBottom = "8px";
+    title.style.color = "var(--accent-blue)";
+
+    const labelEnabled = document.createElement("label");
+    labelEnabled.style.display = "flex";
+    labelEnabled.style.alignItems = "center";
+    labelEnabled.style.gap = "8px";
+    labelEnabled.style.marginBottom = "8px";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = !!configObj.enabled;
+
+    labelEnabled.appendChild(checkbox);
+    labelEnabled.appendChild(document.createTextNode("Enabled"));
+
+    const keyLabel = document.createElement("label");
+    keyLabel.textContent = "Dedicated API Key (Optional):";
+    keyLabel.style.fontSize = "0.9rem";
+
+    const keyInput = document.createElement("input");
+    keyInput.type = "text";
+    keyInput.value = configObj.apiKey || "";
+    keyInput.placeholder = "Leave empty to use Global Key...";
+
+    keyLabel.appendChild(keyInput);
+
+    card.appendChild(title);
+    card.appendChild(labelEnabled);
+    card.appendChild(keyLabel);
+
+    if (includeMinResults) {
+        const minLabel = document.createElement("label");
+        minLabel.textContent = "Min Malicious Engines to Block:";
+        minLabel.style.fontSize = "0.9rem";
+        minLabel.style.marginTop = "8px";
+
+        const minInput = document.createElement("input");
+        minInput.type = "number";
+        minInput.min = "1";
+        minInput.value = configObj.minimumResults ?? 1;
+
+        minLabel.appendChild(minInput);
+        card.appendChild(minLabel);
+
+        minInput.addEventListener("change", (e) => {
+            configObj.minimumResults = parseInt(e.target.value, 10) || 1;
+            saveCallback(configObj);
+        });
+    }
+
+    checkbox.addEventListener("change", (e) => {
+        configObj.enabled = e.target.checked;
+        saveCallback(configObj);
+    });
+
+    keyInput.addEventListener("change", (e) => {
+        configObj.apiKey = e.target.value.trim();
+        saveCallback(configObj);
+    });
+
+    return card;
 }

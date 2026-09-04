@@ -107,3 +107,14 @@ input[type="checkbox"] {
     transform: scale(1.1);
     cursor: pointer;
 }
+
+input[type="number"] {
+    color: var(--accent-blue);
+    background: var(--accent-grey);
+    padding: 8px 12px;
+    margin-top: 6px;
+    border-radius: 6px;
+    border: 1px solid #585b70;
+    box-sizing: border-box;
+    cursor: pointer;
+}

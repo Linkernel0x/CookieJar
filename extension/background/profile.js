@@ -7,10 +7,14 @@ class Profile {
             trust: {
                 googleSafeBrowsing: { apiKey: "", enabled: true },
                 urlScan: { apiKey: "", enabled: true },
-                AlienVaultOTX: { apiKey: "", enabled: true }
+                AlienVaultOTX: { apiKey: "", enabled: true },
+                trancoRank: { apiKey: "", enabled: true },
+                phishTank: { apiKey: "", enabled: true }
             },
-            ranking: {
-                trancoRank: { enabled: true }
+            virustotal: {
+                globalApiKey: "",
+                trustLevel: { enabled: false, apiKey: ""},
+                downloadScan: { enabled: true, apiKey: "", minimumResults: 1}
             }
         };
     }

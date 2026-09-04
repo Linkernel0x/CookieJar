@@ -2,7 +2,7 @@ async function calculateScore(urlToCheck, hostname, data) {
     let baseScore = 100;
     const settings = data.settings || {};
 
-    const trancoPromise = settings.ranking?.trancoRank?.enabled
+    const trancoPromise = settings.trust?.trancoRank?.enabled
         ? getTrancoRank(hostname)
         : Promise.resolve(null);
 
@@ -22,6 +22,11 @@ async function calculateScore(urlToCheck, hostname, data) {
         ? checkUrlScan(hostname, settings.trust?.urlScan?.apiKey || "")
         : Promise.resolve(false);
 
+    const vtApiKey = settings.virustotal?.trustLevel?.apiKey || settings.virustotal?.globalApiKey || "";
+    const vtPromise = (settings.virustotal?.trustLevel?.enabled && vtApiKey)
+        ? checkVirusTotalDomain(hostname, vtApiKey)
+        : Promise.resolve(false);
+
     const openPhishPromise = checkOpenPhish(urlToCheck);
     const domainAgePromise = getDomainAge(hostname);
 
@@ -32,18 +37,24 @@ async function calculateScore(urlToCheck, hostname, data) {
         phishTankPromise,
         urlScanPromise,
         openPhishPromise,
-        domainAgePromise
+        domainAgePromise,
+        vtPromise
     ]);
 
     const rank = results[0].status === "fulfilled" ? results[0].value : null;
-    const isGoogleMalicious = results[1].status === "fulfilled" ? results[1].value : null;
+    const isGoogleMalicious = results[1].status === "fulfilled" ? results[1].value : false;
     const pulseCount = results[2].status === "fulfilled" ? results[2].value : 0;
-    const isPhishTank = results[3].status === "fulfilled" ? results[3].value : null;
-    const isUrlScanMalicious = results[4].status === "fulfilled" ? results[4].value : null;
-    const isOpenPhish = results[5].status === "fulfilled" ? results[5].value : null;
+    const isPhishTank = results[3].status === "fulfilled" ? results[3].value : false;
+    const isUrlScanMalicious = results[4].status === "fulfilled" ? results[4].value : false;
+    const isOpenPhish = results[5].status === "fulfilled" ? results[5].value : false;
     const ageInDays = results[6].status === "fulfilled" ? results[6].value : null;
+    const vtMaliciousCount = results[7].status === "fulfilled" ? results[7].value : false;
 
-    if (settings.ranking?.trancoRank?.enabled) {
+    if (vtMaliciousCount > 0) {
+        baseScore -= Math.min(vtMaliciousCount * 15, 80);
+    }
+
+    if (settings.trust?.trancoRank?.enabled) {
         if (rank && rank > 100000) baseScore -= 10;
         if (!rank) baseScore -= 20;
     }
@@ -69,9 +80,46 @@ async function calculateScore(urlToCheck, hostname, data) {
             phishTank: isPhishTank,
             urlScan: isUrlScanMalicious,
             openPhish: isOpenPhish,
+            virusTotal: vtMaliciousCount,
             domainAgeDays: ageInDays ? Math.round(ageInDays) : "N/A"
         }
     };
+}
+
+async function checkUrlScan(hostname, apiKey) {
+    try {
+        const headers = {};
+        if (apiKey) headers["API-Key"] = apiKey;
+
+        const res = await fetch(`https://urlscan.io/api/v1/search/?q=domain:${hostname}`, {
+            method: "GET",
+            headers: headers
+        });
+        if (!res.ok) return false;
+
+        const data = await res.json();
+        if (!data.results || data.results.length === 0) return false;
+
+        return data.results[0].verdicts?.overall?.malicious === true;
+    } catch {
+        return false;
+    }
+}
+
+async function checkVirusTotalDomain(domain, apiKey) {
+    if (!apiKey) return false;
+    try {
+        const response = await fetch(`https://www.virustotal.com/api/v3/domains/${domain}`, {
+            method: "GET",
+            headers: { "x-apikey": apiKey }
+        });
+        if (!response.ok) return false;
+
+        const data = await response.json();
+        return data.data?.attributes?.last_analysis_stats?.malicious || 0;
+    } catch {
+        return false;
+    }
 }
 
 async function checkGoogleSafeBrowsing(urlToCheck, apiKey) {
@@ -129,27 +177,59 @@ async function getTrancoRank(domain) {
 }
 
 async function getDomainAge(hostname) {
+    const primaryUrl = `https://rdap.org/domain/${domain}`;
+
     try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
+        let response = await fetch(primaryUrl);
+        if (response.ok) {
+            return await response.json();
+        }
 
-        const res = await fetch(`https://rdap.org/domain/${hostname}`, {
-            signal: controller.signal
-        });
-        clearTimeout(timeout);
+        if (response.status === 404) {
+            console.warn(`[CookieJar] RDAP.org 404 per ${domain}. Avvio fallback su IANA bootstrap...`);
+            return await queryIanaBootstrap(domain);
+        }
 
-        if (!res.ok) return null;
-
-        const data = await res.json();
-        const registration = data.events?.find(e => e.eventAction === "registration");
-
-        if (!registration) return null;
-
-        const regDate = new Date(registration.eventDate);
-        return (Date.now() - regDate.getTime()) / (1000 * 60 * 60 * 24);
-    } catch {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    } catch (error) {
+        console.error("[CookieJar] Errore critico RDAP:", error);
         return null;
     }
+}
+
+async function queryIanaBootstrap(domain) {
+    const parts = domain.split(".");
+    const tld = parts[parts.length - 1].toLowerCase();
+
+    const ianaBootstrapUrl = "https://data.iana.org/rdap/dns.json";
+    const res = await fetch(ianaBootstrapUrl);
+
+    if (!res.ok) throw new Error("Couldn't load bootstrap IANA");
+
+    const bootstrapData = await res.json();
+
+    let rdapServiceUrl = null;
+    for (const entry of bootstrapData.services) {
+        const tldsInEntry = entry[0];
+        const urls = entry[1];
+        if (tldsInEntry.includes(tld)) {
+            rdapServiceUrl = urls[0];
+            break;
+        }
+    }
+
+    if (!rdapServiceUrl) {
+        throw new Error(`No RDAP found on IANA .${tld}`);
+    }
+
+    const finalQuery = `${rdapServiceUrl}domain/${domain}`;
+    const fallbackResponse = await fetch(finalQuery);
+
+    if (!fallbackResponse.ok) {
+        throw new Error(`Failed registry endpoint: ${finalQuery}`);
+    }
+
+    return await fallbackResponse.json();
 }
 
 async function checkPhishTank(urlToCheck, apiKey) {
@@ -158,13 +238,22 @@ async function checkPhishTank(urlToCheck, apiKey) {
             url: urlToCheck,
             format: "json"
         });
-        if (apiKey) bodyParams.set("app_key", apiKey);
+
+        if (apiKey) {
+            bodyParams.set("app_key", apiKey);
+        } else {
+            return false;
+        }
 
         const res = await fetch("https://checkurl.phishtank.com/checkurl/", {
             method: "POST",
-            headers: {"Content-Type": "application/x-www-form-urlencoded"},
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "User-Agent": "phishTank/CookieJarExtension",
+            },
             body: bodyParams
         });
+
         if (!res.ok) return false;
         const data = await res.json();
         return data.results?.valid === true;
@@ -173,32 +262,14 @@ async function checkPhishTank(urlToCheck, apiKey) {
     }
 }
 
-async function checkOpenPhish(urlToCheck){
+async function checkOpenPhish(urlToCheck) {
     try {
         const res = await fetch(`https://openphish.com/feed.txt`);
         if (!res.ok) return false;
         const text = await res.text();
         const urls = text.split("\n");
-        return urls.includes(urlToCheck)
+        return urls.includes(urlToCheck);
     } catch {
         return false;
-    }
-}
-
-async function checkUrlScan(urlToCheck, apiKey){
-    try {
-        const submitRes = await fetch("https://urlscan.io/api/v1/scan/", {
-            method: "POST",
-            headers: {
-                "API-Key": apiKey,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ url: urlToCheck, visibility: "public" })
-        });
-        if (!submitRes.ok) return null;
-        const submitData = await submitRes.json();
-        return submitData.result;
-    } catch {
-        return null;
     }
 }

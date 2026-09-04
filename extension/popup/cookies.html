@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="popup.css">
+    <style>
+        body {
+            width: 100% !important;
+            min-width: 520px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            padding: 16px;
+            margin: 0;
+        }
+        header {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+        .select-scope {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #585b70;
+            background: var(--bg-card);
+            color: var(--text-main);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .search-input {
+            flex-grow: 1;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #585b70;
+            background: var(--bg-card);
+            color: var(--text-main);
+            font-size: 0.85rem;
+        }
+        #content {
+            flex-grow: 1;
+            overflow-y: auto;
+            background: var(--bg-base);
+            border-radius: 10px;
+            padding: 4px;
+        }
+        .storage-item {
+            background: var(--bg-card);
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .storage-info {
+            flex-grow: 1;
+            word-break: break-all;
+            font-size: 0.85rem;
+        }
+        .actions-container {
+            display: flex;
+            gap: 6px;
+        }
+        .btn-action {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 0.95rem;
+            padding: 4px 6px;
+            border-radius: 4px;
+            color: var(--text-main);
+        }
+        .btn-action.edit:hover { color: var(--accent-blue); background: rgba(137, 180, 250, 0.1); }
+        .btn-action.delete:hover { color: var(--accent-red); background: rgba(243, 139, 168, 0.1); }
+        .btn-action.save { color: var(--accent-green); }
+    </style>
+</head>
+<body>
+<header>
+    <select id="storage-scope" class="select-scope">
+        <option value="cookies">Cookies</option>
+        <option value="localStorage">Local Storage</option>
+        <option value="sessionStorage">Session Storage</option>
+        <option value="extensionStorage">Extension Storage</option>
+    </select>
+    <input type="text" id="search-input" class="search-input" placeholder="Search by key/name...">
+    <button id="open-dashboard" class="btn primary" style="width: auto; margin: 0;"><i class="fa-solid fa-gauge"></i></button>
+</header>
+
+<main id="content">
+    Loading...
+</main>
+
+<script src="cookies.js"></script>
+</body>
+</html>
