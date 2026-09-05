@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.getElementById("cookie-count").textContent = `(${cookies.length})`;
             document.getElementById("cookie-breakdown").textContent = `Session: ${sessionCookies} | Persistent: ${persistentCookies}`;
 
-            await updateTrustLevel(url.hostname);
+            await updateTrustLevel(url.hostname, tab);
 
         } catch (e) {
             console.error(e);
@@ -53,7 +53,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 });
 
-async function updateTrustLevel(hostname) {
+async function updateTrustLevel(hostname, tab) {
     const element = document.getElementById("trust-level");
     if (!hostname) {
         element.textContent = "Unknown";
@@ -66,15 +66,20 @@ async function updateTrustLevel(hostname) {
 
     let value = trustPoints[hostname];
 
-    if (value === undefined) {
+    if (trustPoints[hostname] === undefined) {
         element.textContent = "Loading...";
         element.style.color = "var(--accent-grey)";
-        return;
+        await forceTrustFetch(tab);
+
+        const storage = await browser.storage.local.get("CookieJar");
+        const profileData = storage.CookieJar || {};
+        const trustPoints = profileData.trustPoints || {};
+        value = trustPoints[hostname];
     }
 
     let trustCssVar = "--accent-grey";
     if (value.score <= 35) trustCssVar = "--accent-red";
-    else if (value.score <= 65) trustCssVar = "--accent-orange";
+    else if (value.score <= 70) trustCssVar = "--accent-orange";
     else if (value.score <= 100) trustCssVar = "--accent-green";
 
     element.textContent = `${value.score}`;
@@ -82,22 +87,38 @@ async function updateTrustLevel(hostname) {
 
     const sourcesTrustLevel = document.getElementById("resources");
     const formattedTime = new Date(value.timestamp).toLocaleString();
+
+    const renderStatus = (obj, type) => {
+        if (!obj || obj.status === "SKIPPED") return `<span style="color: #6c7086;">Disabled</span>`;
+        if (obj.status === "ERROR") return `<span style="color: #f38ba8;">Error/Unreachable</span>`;
+
+        if (type === "boolean") {
+            return obj.value ? `<span style="color: #f38ba8; font-weight: bold;">Malicious</span>` : `<span style="color: #a6e3a1;">Safe</span>`;
+        }
+        if (type === "count") {
+            return `<span style="color: #cba6f7;">${obj.value}</span>`;
+        }
+        if (type === "days") {
+            return obj.value !== null ? `<span style="color: #89b4fa;">${obj.value} days</span>` : `<span style="color: #f38ba8;">N/A</span>`;
+        }
+        return `<span style="color: #a6adc8;">${obj.value ?? 'N/A'}</span>`;
+    };
+
     if (sourcesTrustLevel) {
         sourcesTrustLevel.innerHTML = `
-        <li>Google: <span style="color: #a6adc8; float: right">${value.sources.googleSafeBrowsing === null ? '--' : (value.sources.googleSafeBrowsing ? 'Malicious' : 'Safe')}</span></li>
-        <li>Alien Vault: <span style="color: #a6adc8; float: right">${value.sources.alienVaultOTX === null ? '--' : value.sources.alienVaultOTX} pulses</span></li>
-        <li>PhishTank: <span style="color: #a6adc8; float: right">${value.sources.phishTank === null ? '--' : (value.sources.phishTank ? 'Malicious' : 'Safe')}</span></li>
-        <li>URLScan: <span style="color: #a6adc8; float: right">${value.sources.urlScan === null ? '--' : (value.sources.urlScan ? 'Malicious' : 'Safe')}</span></li>
-        <li>OpenPhish: <span style="color: #a6adc8; float: right">${value.sources.openPhish === null ? '--' : (value.sources.openPhish ? 'Malicious' : 'Safe')}</span></li>
-        <li>Tranco Rank: <span style="color: #a6adc8; float: right">${value.sources.trancoRank === null ? '--' : value.sources.trancoRank}</span></li>
-        <li>Domain Age: <span style="color: #a6adc8; float: right">${(value.sources.domainAgeDays !== 'N/A' && value.sources.domainAgeDays !== null) ? value.sources.domainAgeDays + ' days' : 'N/A'}</span></li>
-        <li>VirusTotal: <span style="color: #a6adc8; float: right">${value.sources.virusTotal === null ? '--' : value.sources.virusTotal}</span></li>
-        <li style="margin-top: 8px; font-style: italic;">Updated: ${formattedTime}</li>
+        <li>Google: <span style="float: right">${renderStatus(value.sources.googleSafeBrowsing, "boolean")}</span></li>
+        <li>Alien Vault: <span style="float: right">${renderStatus(value.sources.alienVaultOTX, "count")} pulses</span></li>
+        <li>PhishTank: <span style="float: right">${renderStatus(value.sources.phishTank, "boolean")}</span></li>
+        <li>URLScan: <span style="float: right">${renderStatus(value.sources.urlScan, "boolean")}</span></li>
+        <li>OpenPhish: <span style="float: right">${renderStatus(value.sources.openPhish, "boolean")}</span></li>
+        <li>Tranco Rank: <span style="float: right">${renderStatus(value.sources.trancoRank, "text")}</span></li>
+        <li>Domain Age: <span style="float: right">${renderStatus(value.sources.domainAgeDays, "days")}</span></li>
+        <li>VirusTotal: <span style="float: right">${renderStatus(value.sources.virusTotal, "count")}</span></li>
+        <li style="margin-top: 8px; font-style: italic; color: #a6adc8;">Updated: ${formattedTime}</li>
         `;
     }
 
-    browser.action.setBadgeText({ text: value.score.toString(), tabId: await getCurrentTabId() });
-    browser.action.setBadgeBackgroundColor({ color: getComputedStyle(document.documentElement).getPropertyValue(trustCssVar).trim() });
+    renderBadge(value.score);
 }
 
 async function forceTrustFetch(tab) {
@@ -115,9 +136,4 @@ async function forceTrustFetch(tab) {
     } catch (e) {
         console.error("[CookieJar] Refetch error:", e);
     }
-}
-
-async function getCurrentTabId() {
-    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    return tab.id;
 }

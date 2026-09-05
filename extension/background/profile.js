@@ -3,7 +3,7 @@ class Profile {
         this.schemaVersion = schemaVersion;
         this.trustPoints = trustPoints;
         this.settings = settings || {
-            misc: { allowNotification: true },
+            misc: { allowNotification: true, renderColorBadge: true },
             trust: {
                 googleSafeBrowsing: { apiKey: "", enabled: true },
                 urlScan: { apiKey: "", enabled: true },
