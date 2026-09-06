@@ -1,5 +1,5 @@
 class Profile {
-    constructor(schemaVersion = 1, trustPoints = {}, settings = null) {
+    constructor(schemaVersion = 1, trustPoints = {}, settings = null, frozenCookies = {}) {
         this.schemaVersion = schemaVersion;
         this.trustPoints = trustPoints;
         this.settings = settings || {
@@ -17,18 +17,20 @@ class Profile {
                 downloadScan: { enabled: true, apiKey: "", minimumResults: 1}
             }
         };
+        this.frozenCookies = frozenCookies || {};
     }
 
     static fromJSON(json) {
         if (!json) return new Profile();
-        return new Profile(json.schemaVersion ?? 1, json.trustPoints ?? {}, json.settings ?? new Profile().settings);
+        return new Profile(json.schemaVersion ?? 1, json.trustPoints ?? {}, json.settings ?? new Profile().settings, json.frozenCookies ?? {});
     }
 
     toJSON() {
         return {
             schemaVersion: this.schemaVersion,
             trustPoints: this.trustPoints,
-            settings: this.settings
+            settings: this.settings,
+            frozenCookies: this.frozenCookies
         };
     }
 }

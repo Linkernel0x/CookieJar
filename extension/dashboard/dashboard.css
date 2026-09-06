@@ -44,7 +44,6 @@ h1 {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* Griglia per le opzioni */
 .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -90,7 +89,16 @@ h1 {
     filter: brightness(1.1);
 }
 
-/* Form & Inputs */
+.btn.secondary {
+    background: var(--bg-base);
+    color: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+
+.btn.secondary:hover {
+    filter: brightness(1.1);
+}
+
 input[type="text"] {
     width: 100%;
     padding: 8px 12px;
@@ -117,4 +125,105 @@ input[type="number"] {
     border: 1px solid #585b70;
     box-sizing: border-box;
     cursor: pointer;
+}
+
+.donut-container {
+    width: 160px;
+    height: 160px;
+    position: relative;
+}
+.donut-chart {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+    border-radius: 50%;
+}
+.donut-ring {
+    stroke: #e6e6e6;
+}
+.donut-segment {
+    transition: stroke-dasharray 0.3s ease;
+}
+.donut-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: sans-serif;
+    font-weight: bold;
+    font-size: 18px;
+    color: #333;
+}
+
+.row {
+    display: flex;
+    flex-direction: row;
+    gap: 16px;
+    justify-content: flex-start;
+    align-items: center;
+}
+
+.text-tag {
+    color: #f1f1f1f1;
+    border-radius: 10px;
+    padding: 1px 2px 2px;
+    background: #a6e3a1
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+    max-height: 380px;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.history-list::-webkit-scrollbar {
+    width: 6px;
+}
+.history-list::-webkit-scrollbar-thumb {
+    background: var(--bg-input);
+    border-radius: 4px;
+}
+
+.history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-surface);
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.history-item:hover {
+    background: #1e1e2e;
+    transform: translateX(2px);
+}
+
+.history-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.history-domain {
+    font-weight: 600;
+    color: var(--text-main);
+    font-size: 0.95rem;
+}
+
+.history-date {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.history-score {
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 4px 10px;
+    border-radius: 6px;
 }

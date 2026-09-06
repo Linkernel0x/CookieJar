@@ -11,6 +11,39 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
+    document.getElementById("export")?.addEventListener("click", async () => {
+        const data = await browser.storage.local.get("CookieJar");
+        const blob = new Blob([JSON.stringify(data.CookieJar, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob)
+        browser.tabs.create({ url: url });
+    });
+
+    document.getElementById("import")?.addEventListener("click", async () => {
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = ".json,application/json";
+        fileInput.addEventListener("change", async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (!importedData || typeof importedData !== "object") throw new Error("Invalid JSON structure.");
+                    await browser.storage.local.set({ CookieJar: importedData });
+                    window.alert("Import successful!");
+                    window.location.reload();
+                } catch (error) {
+                    console.error("Error importing data:", error);
+                    window.alert("Failed to import data. Please ensure the JSON structure is correct.");
+                }
+            };
+            reader.readAsText(file);
+        });
+        fileInput.click();
+    });
+
     const data = await browser.storage.local.get("CookieJar");
     await loadMisc(data);
     await loadTrustSettings(data);

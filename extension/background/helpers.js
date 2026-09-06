@@ -1,89 +1,197 @@
+async function sendNotification(title, message) {
+    const storage = await browser.storage.local.get("CookieJar");
+    const profileData = storage.CookieJar || new Profile().toJSON();
+    const allow_notifications = profileData.settings?.misc?.allowNotification;
+
+    if (allow_notifications) {
+        browser.notifications.create({
+            type: "basic",
+            iconUrl: "icons/icon.svg",
+            title: title,
+            message: message
+        });
+    }
+}
+
+async function renderBadge(value) {
+    const storage = await browser.storage.local.get("CookieJar");
+    const profileData = storage.CookieJar || new Profile().toJSON();
+    const allow_badge = profileData.settings?.misc?.renderColorBadge;
+
+    if (!allow_badge) {
+        const tabId = await getCurrentTabId();
+        browser.action.setBadgeText({ text: "", tabId: tabId });
+        return;
+    }
+
+    let color = "#a6adc8";
+
+    if (value <= 35) color = "#f38ba8";
+    else if (value <= 65) color = "#fab387";
+    else if (value <= 100) color = "#a6e3a1";
+
+    const tabId = await getCurrentTabId();
+
+    browser.action.setBadgeText({
+        text: (value !== null && value !== undefined) ? value.toString() : "N/A",
+        tabId: tabId
+    });
+
+    browser.action.setBadgeBackgroundColor({
+        color: color,
+        tabId: tabId
+    });
+}
+
+async function getCurrentTabId() {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    return tab.id;
+}
+
 async function calculateScore(urlToCheck, hostname, data) {
     let baseScore = 100;
     const settings = data.settings || {};
-
-    const trancoPromise = settings.trust?.trancoRank?.enabled
-        ? getTrancoRank(hostname)
-        : Promise.resolve(null);
-
-    const googlePromise = (settings.trust?.googleSafeBrowsing?.enabled && settings.trust.googleSafeBrowsing.apiKey)
-        ? checkGoogleSafeBrowsing(urlToCheck, settings.trust.googleSafeBrowsing.apiKey)
-        : Promise.resolve(false);
-
-    const alienVaultPromise = (settings.trust?.AlienVaultOTX?.enabled && settings.trust.AlienVaultOTX.apiKey)
-        ? getAlienVaultDomainInfo(hostname, settings.trust.AlienVaultOTX.apiKey)
-        : Promise.resolve(0);
-
-    const phishTankPromise = (settings.trust?.phishTank?.enabled)
-        ? checkPhishTank(urlToCheck, settings.trust?.phishTank?.apiKey || "")
-        : Promise.resolve(false);
-
-    const urlScanPromise = (settings.trust?.urlScan?.enabled)
-        ? checkUrlScan(hostname, settings.trust?.urlScan?.apiKey || "")
-        : Promise.resolve(false);
-
-    const vtApiKey = settings.virustotal?.trustLevel?.apiKey || settings.virustotal?.globalApiKey || "";
-    const vtPromise = (settings.virustotal?.trustLevel?.enabled && vtApiKey)
-        ? checkVirusTotalDomain(hostname, vtApiKey)
-        : Promise.resolve(false);
-
-    const openPhishPromise = checkOpenPhish(urlToCheck);
-    const domainAgePromise = getDomainAge(hostname);
+    const trust = settings.trust || {};
 
     const results = await Promise.allSettled([
-        trancoPromise,
-        googlePromise,
-        alienVaultPromise,
-        phishTankPromise,
-        urlScanPromise,
-        openPhishPromise,
-        domainAgePromise,
-        vtPromise
+        trust.trancoRank?.enabled ? getTrancoRank(hostname) : Promise.resolve({ status: "SKIPPED", value: null }),
+        (trust.googleSafeBrowsing?.enabled && trust.googleSafeBrowsing.apiKey)
+            ? checkGoogleSafeBrowsing(urlToCheck, trust.googleSafeBrowsing.apiKey) : Promise.resolve({ status: "SKIPPED", value: null }),
+        (trust.AlienVaultOTX?.enabled && trust.AlienVaultOTX.apiKey)
+            ? getAlienVaultDomainInfo(hostname, trust.AlienVaultOTX.apiKey) : Promise.resolve({ status: "SKIPPED", value: null }),
+        trust.phishTank?.enabled ? checkPhishTank(urlToCheck, trust.phishTank.apiKey || "") : Promise.resolve({ status: "SKIPPED", value: null }),
+        trust.urlScan?.enabled ? checkUrlScan(hostname, trust.urlScan.apiKey || "") : Promise.resolve({ status: "SKIPPED", value: null }),
+        checkOpenPhish(urlToCheck),
+        getDomainAge(hostname),
+        (settings.virustotal?.trustLevel?.enabled)
+            ? checkVirusTotalDomain(hostname, settings.virustotal.trustLevel.apiKey || settings.virustotal.globalApiKey) : Promise.resolve({ status: "SKIPPED", value: null })
     ]);
 
-    const rank = results[0].status === "fulfilled" ? results[0].value : null;
-    const isGoogleMalicious = results[1].status === "fulfilled" ? results[1].value : false;
-    const pulseCount = results[2].status === "fulfilled" ? results[2].value : 0;
-    const isPhishTank = results[3].status === "fulfilled" ? results[3].value : false;
-    const isUrlScanMalicious = results[4].status === "fulfilled" ? results[4].value : false;
-    const isOpenPhish = results[5].status === "fulfilled" ? results[5].value : false;
-    const ageInDays = results[6].status === "fulfilled" ? results[6].value : null;
-    const vtMaliciousCount = results[7].status === "fulfilled" ? results[7].value : false;
+    const extractRes = (index) => results[index].status === "fulfilled" ? results[index].value : { status: "ERROR", value: null };
 
-    if (vtMaliciousCount > 0) {
-        baseScore -= Math.min(vtMaliciousCount * 15, 80);
+    const trancoRes = extractRes(0);
+    const googleRes = extractRes(1);
+    const alienRes = extractRes(2);
+    const phishTankRes = extractRes(3);
+    const urlScanRes = extractRes(4);
+    const openPhishRes = extractRes(5);
+    const ageRes = extractRes(6);
+    const vtRes = extractRes(7);
+
+    if (vtRes.status === "SUCCESS" && vtRes.value > 0) {
+        baseScore -= Math.min(vtRes.value * 15, 80);
     }
 
-    if (settings.trust?.trancoRank?.enabled) {
-        if (rank && rank > 100000) baseScore -= 10;
-        if (!rank) baseScore -= 20;
+    if (trancoRes.status === "SUCCESS") {
+        if (trancoRes.value && trancoRes.value > 100000) baseScore -= 10;
+        if (!trancoRes.value) baseScore -= 20;
     }
 
-    if (isGoogleMalicious) baseScore -= 80;
-    if (isPhishTank) baseScore -= 80;
-    if (isUrlScanMalicious) baseScore -= 70;
-    if (isOpenPhish) baseScore -= 80;
-    if (pulseCount > 0) baseScore -= Math.min(pulseCount * 10, 50);
+    if (googleRes.status === "SUCCESS" && googleRes.value === true) baseScore -= 80;
+    if (phishTankRes.status === "SUCCESS" && phishTankRes.value === true) baseScore -= 80;
+    if (urlScanRes.status === "SUCCESS" && urlScanRes.value === true) baseScore -= 70;
+    if (openPhishRes.status === "SUCCESS" && openPhishRes.value === true) baseScore -= 80;
+    if (alienRes.status === "SUCCESS" && alienRes.value > 0) baseScore -= Math.min(alienRes.value * 10, 50);
 
-    if (ageInDays !== null) {
-        if (ageInDays < 30) baseScore -= 30;
-        else if (ageInDays < 180) baseScore -= 10;
+    if (ageRes.status === "SUCCESS" && ageRes.value !== null) {
+        if (ageRes.value < 30) baseScore -= 30;
+        else if (ageRes.value < 180) baseScore -= 10;
     }
 
     return {
         score: Math.max(0, baseScore),
         timestamp: Date.now(),
         sources: {
-            googleSafeBrowsing: isGoogleMalicious,
-            alienVaultOTX: pulseCount,
-            trancoRank: rank || "N/A",
-            phishTank: isPhishTank,
-            urlScan: isUrlScanMalicious,
-            openPhish: isOpenPhish,
-            virusTotal: vtMaliciousCount,
-            domainAgeDays: ageInDays ? Math.round(ageInDays) : "N/A"
+            googleSafeBrowsing: googleRes,
+            alienVaultOTX: alienRes,
+            trancoRank: trancoRes,
+            phishTank: phishTankRes,
+            urlScan: urlScanRes,
+            openPhish: openPhishRes,
+            virusTotal: vtRes,
+            domainAgeDays: ageRes
         }
     };
+}
+async function getDomainAge(hostname) {
+    const domain = getApexDomain(hostname);
+    try {
+        const primaryRes = await fetch(`https://rdap.org/domain/${domain}`);
+        if (primaryRes.ok) {
+            const data = await primaryRes.json();
+            const days = extractDaysFromRdap(data);
+            return days !== null
+                ? { status: "SUCCESS", value: days }
+                : { status: "ERROR", value: null };
+        }
+
+        if (primaryRes.status === 404) {
+            const ianaData = await queryIanaBootstrap(domain);
+            if (ianaData) {
+                const days = extractDaysFromRdap(ianaData);
+                return days !== null
+                    ? { status: "SUCCESS", value: days }
+                    : { status: "ERROR", value: null };
+            }
+        }
+
+        return { status: "ERROR", value: null };
+    } catch (error) {
+        console.warn(`[CookieJar] Error fetching domain age for ${domain}:`, error);
+        return { status: "ERROR", value: null };
+    }
+}
+
+function extractDaysFromRdap(rdapData) {
+    if (!rdapData || !rdapData.events || !Array.isArray(rdapData.events)) return null;
+
+    const regEvent = rdapData.events.find(
+        e => e.eventAction === "registration" || e.eventAction === "date created"
+    );
+    if (!regEvent || !regEvent.eventDate) return null;
+
+    const creationDate = new Date(regEvent.eventDate);
+    if (isNaN(creationDate.getTime())) return null;
+
+    const diffMs = Date.now() - creationDate.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    return days >= 0 ? days : null;
+}
+
+async function queryIanaBootstrap(domain) {
+    try {
+        const parts = domain.split(".");
+        const tld = parts[parts.length - 1].toLowerCase();
+
+        const res = await fetch("https://data.iana.org/rdap/dns.json");
+        if (!res.ok) return null;
+
+        const bootstrapData = await res.json();
+        let rdapServiceUrl = null;
+
+        for (const entry of bootstrapData.services) {
+            if (entry[0].includes(tld)) {
+                rdapServiceUrl = entry[1][0];
+                break;
+            }
+        }
+
+        if (!rdapServiceUrl) return null;
+
+        const fallbackResponse = await fetch(`${rdapServiceUrl}domain/${domain}`);
+        if (!fallbackResponse.ok) return null;
+
+        return await fallbackResponse.json();
+    } catch {
+        return null;
+    }
+}
+
+function getApexDomain(hostname) {
+    const parts = hostname.split('.');
+    if (parts.length <= 2) return hostname;
+    return parts.slice(-2).join('.');
 }
 
 async function checkUrlScan(hostname, apiKey) {
@@ -91,34 +199,31 @@ async function checkUrlScan(hostname, apiKey) {
         const headers = {};
         if (apiKey) headers["API-Key"] = apiKey;
 
-        const res = await fetch(`https://urlscan.io/api/v1/search/?q=domain:${hostname}`, {
-            method: "GET",
-            headers: headers
-        });
-        if (!res.ok) return false;
+        const res = await fetch(`https://urlscan.io/api/v1/search/?q=domain:${hostname}`, { headers });
+        if (!res.ok) return { status: "ERROR", value: null };
 
         const data = await res.json();
-        if (!data.results || data.results.length === 0) return false;
+        if (!data.results || data.results.length === 0) return { status: "SUCCESS", value: false };
 
-        return data.results[0].verdicts?.overall?.malicious === true;
+        return { status: "SUCCESS", value: data.results[0].verdicts?.overall?.malicious === true };
     } catch {
-        return false;
+        return { status: "ERROR", value: null };
     }
 }
 
 async function checkVirusTotalDomain(domain, apiKey) {
-    if (!apiKey) return false;
+    if (!apiKey) return { status: "SKIPPED", value: null };
     try {
         const response = await fetch(`https://www.virustotal.com/api/v3/domains/${domain}`, {
-            method: "GET",
             headers: { "x-apikey": apiKey }
         });
-        if (!response.ok) return false;
+        if (!response.ok) return { status: "ERROR", value: null };
 
         const data = await response.json();
-        return data.data?.attributes?.last_analysis_stats?.malicious || 0;
+        const maliciousCount = data.data?.attributes?.last_analysis_stats?.malicious || 0;
+        return { status: "SUCCESS", value: maliciousCount };
     } catch {
-        return false;
+        return { status: "ERROR", value: null };
     }
 }
 
@@ -134,142 +239,195 @@ async function checkGoogleSafeBrowsing(urlToCheck, apiKey) {
 
         const endpoint = `https://safebrowsing.googleapis.com/v5/hashes:search?key=${apiKey}&hashPrefixes=${encodeURIComponent(hashPrefix)}`;
         const response = await fetch(endpoint);
-        if (!response.ok) return false;
+        if (!response.ok) return { status: "ERROR", value: null };
 
         const result = await response.json();
-        if (!result.fullHashes) return false;
+        if (!result.fullHashes) return { status: "SUCCESS", value: false };
 
         const fullHashBase64 = btoa(String.fromCharCode(...hashArray));
-        return result.fullHashes.some(match => match.fullHash === fullHashBase64);
-    } catch (e) {
-        console.error("[CookieJar] Google Safe Browsing error:", e);
-        return false;
+        const isMalicious = result.fullHashes.some(match => match.fullHash === fullHashBase64);
+        return { status: "SUCCESS", value: isMalicious };
+    } catch {
+        return { status: "ERROR", value: null };
     }
 }
 
 async function getAlienVaultDomainInfo(domain, apiKey) {
     try {
         const endpoint = `https://otx.alienvault.com/api/v1/indicators/domain/${domain}/general`;
-        const response = await fetch(endpoint, {
-            method: "GET",
-            headers: { "X-OTX-API-KEY": apiKey }
-        });
-        if (!response.ok) return 0;
+        const response = await fetch(endpoint, { headers: { "X-OTX-API-KEY": apiKey } });
+        if (!response.ok) return { status: "ERROR", value: null };
         const data = await response.json();
-        return data.pulse_info?.count || 0;
+        return { status: "SUCCESS", value: data.pulse_info?.count || 0 };
     } catch {
-        return 0;
+        return { status: "ERROR", value: null };
     }
 }
 
 async function getTrancoRank(domain) {
     try {
         const response = await fetch(`https://tranco-list.eu/api/ranks/domain/${domain}`);
-        if (!response.ok) return null;
+        if (!response.ok) return { status: "ERROR", value: null };
         const data = await response.json();
-        if (data.ranks && data.ranks.length > 0) {
-            return data.ranks[0].rank;
-        }
-        return null;
+        const rank = (data.ranks && data.ranks.length > 0) ? data.ranks[0].rank : null;
+        return { status: "SUCCESS", value: rank };
     } catch {
-        return null;
+        return { status: "ERROR", value: null };
     }
-}
-
-async function getDomainAge(hostname) {
-    const primaryUrl = `https://rdap.org/domain/${domain}`;
-
-    try {
-        let response = await fetch(primaryUrl);
-        if (response.ok) {
-            return await response.json();
-        }
-
-        if (response.status === 404) {
-            console.warn(`[CookieJar] RDAP.org 404 per ${domain}. Avvio fallback su IANA bootstrap...`);
-            return await queryIanaBootstrap(domain);
-        }
-
-        throw new Error(`HTTP error! status: ${response.status}`);
-    } catch (error) {
-        console.error("[CookieJar] Errore critico RDAP:", error);
-        return null;
-    }
-}
-
-async function queryIanaBootstrap(domain) {
-    const parts = domain.split(".");
-    const tld = parts[parts.length - 1].toLowerCase();
-
-    const ianaBootstrapUrl = "https://data.iana.org/rdap/dns.json";
-    const res = await fetch(ianaBootstrapUrl);
-
-    if (!res.ok) throw new Error("Couldn't load bootstrap IANA");
-
-    const bootstrapData = await res.json();
-
-    let rdapServiceUrl = null;
-    for (const entry of bootstrapData.services) {
-        const tldsInEntry = entry[0];
-        const urls = entry[1];
-        if (tldsInEntry.includes(tld)) {
-            rdapServiceUrl = urls[0];
-            break;
-        }
-    }
-
-    if (!rdapServiceUrl) {
-        throw new Error(`No RDAP found on IANA .${tld}`);
-    }
-
-    const finalQuery = `${rdapServiceUrl}domain/${domain}`;
-    const fallbackResponse = await fetch(finalQuery);
-
-    if (!fallbackResponse.ok) {
-        throw new Error(`Failed registry endpoint: ${finalQuery}`);
-    }
-
-    return await fallbackResponse.json();
 }
 
 async function checkPhishTank(urlToCheck, apiKey) {
+    if (!apiKey) return { status: "SKIPPED", value: null };
     try {
-        const bodyParams = new URLSearchParams({
-            url: urlToCheck,
-            format: "json"
-        });
-
-        if (apiKey) {
-            bodyParams.set("app_key", apiKey);
-        } else {
-            return false;
-        }
-
+        const bodyParams = new URLSearchParams({ url: urlToCheck, format: "json", app_key: apiKey });
         const res = await fetch("https://checkurl.phishtank.com/checkurl/", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "User-Agent": "phishTank/CookieJarExtension",
-            },
+            headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "phishTank/CookieJarExtension" },
             body: bodyParams
         });
-
-        if (!res.ok) return false;
+        if (!res.ok) return { status: "ERROR", value: null };
         const data = await res.json();
-        return data.results?.valid === true;
+        return { status: "SUCCESS", value: data.results?.valid === true };
     } catch {
-        return false;
+        return { status: "ERROR", value: null };
     }
 }
 
 async function checkOpenPhish(urlToCheck) {
     try {
-        const res = await fetch(`https://openphish.com/feed.txt`);
-        if (!res.ok) return false;
-        const text = await res.text();
-        const urls = text.split("\n");
-        return urls.includes(urlToCheck);
+        const storage = await browser.storage.local.get("openPhishCache");
+        let feed = storage.openPhishCache?.data || [];
+        const lastFetch = storage.openPhishCache?.timestamp || 0;
+
+        if (Date.now() - lastFetch > 60 * 60 * 1000 || feed.length === 0) {
+            const res = await fetch("https://openphish.com/feed.txt");
+            if (res.ok) {
+                const text = await res.text();
+                feed = text.split("\n").map(u => u.trim()).filter(Boolean);
+                await browser.storage.local.set({ openPhishCache: { data: feed, timestamp: Date.now() } });
+            } else if (feed.length === 0) {
+                return { status: "ERROR", value: null };
+            }
+        }
+
+        return { status: "SUCCESS", value: feed.includes(urlToCheck) };
     } catch {
-        return false;
+        return { status: "ERROR", value: null };
     }
+}
+
+const renderStatus = (obj, type) => {
+    if (!obj || obj.status === "SKIPPED") return `<span style="color: #6c7086;">Disabled</span>`;
+    if (obj.status === "ERROR") return `<span style="color: #f38ba8;">Error/Unreachable</span>`;
+
+    if (type === "boolean") {
+        return obj.value ? `<span style="color: #f38ba8; font-weight: bold;">Malicious</span>` : `<span style="color: #a6e3a1;">Safe</span>`;
+    }
+    if (type === "count") {
+        return `<span style="color: #cba6f7;">${obj.value}</span>`;
+    }
+    if (type === "days") {
+        return obj.value !== null ? `<span style="color: #89b4fa;">${obj.value} days</span>` : `<span style="color: #f38ba8;">N/A</span>`;
+    }
+    return `<span style="color: #a6adc8;">${obj.value ?? 'N/A'}</span>`;
+};
+
+function escapeHtml(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+function generateID() {
+    return 'id_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+}
+
+async function freezeCookie(profile, cookie) {
+    const freezeId = generateID();
+
+    const protocol = cookie.secure ? "https://" : "http://";
+    const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.substring(1) : cookie.domain;
+    const cookieUrl = `${protocol}${cleanDomain}${cookie.path}`;
+
+    await browser.cookies.remove({
+        url: cookieUrl,
+        name: cookie.name,
+        storeId: cookie.storeId
+    });
+
+    if (!profile.frozenCookies) {
+        profile.frozenCookies = {};
+    }
+
+    profile.frozenCookies[freezeId] = {
+        id: freezeId,
+        domain: cleanDomain,
+        originalCookie: cookie,
+        frozenAt: Date.now()
+    };
+
+    await browser.storage.local.set({ CookieJar: profile.toJSON() });
+    return freezeId;
+}
+
+async function unfreezeCookie(profile, freezeId) {
+    const frozenItem = profile.frozenCookies?.[freezeId];
+    if (!frozenItem) return false;
+
+    const c = frozenItem.originalCookie;
+    const protocol = c.secure ? "https://" : "http://";
+    const cookieUrl = `${protocol}${frozenItem.domain}${c.path}`;
+
+    await browser.cookies.set({
+        url: cookieUrl,
+        name: c.name,
+        value: c.value,
+        domain: c.domain,
+        path: c.path,
+        secure: c.secure,
+        httpOnly: c.httpOnly,
+        sameSite: c.sameSite,
+        expirationDate: c.expirationDate,
+        storeId: c.storeId
+    });
+
+    delete profile.frozenCookies[freezeId];
+
+    await browser.storage.local.set({ CookieJar: profile.toJSON() });
+    return true;
+}
+
+function getFrozenCookies(profile, domain) {
+    if (!profile?.frozenCookies) return [];
+
+    return Object.values(profile.frozenCookies)
+        .filter(frozen => domain === frozen.domain || domain.endsWith('.' + frozen.domain) || frozen.domain.endsWith('.' + domain))
+        .map(frozen => ({
+            key: frozen.originalCookie.name,
+            value: frozen.originalCookie.value,
+            isFrozen: true,
+            freezeId: frozen.id,
+            frozenAt: frozen.frozenAt,
+            raw: frozen.originalCookie
+        }));
+}
+
+async function blockDomain(ruleId, domain){
+    await browser.declarativeNetRequest.updateDynamicRules({
+        addRules: [
+            {
+                id: ruleId,
+                priority: 1,
+                action: {type: "block"},
+                condition: {
+                    urlFilter: `||${domain}^`,
+                    resourceTypes: ["main_frame", "sub_frame", "script"]
+                }
+            }
+        ],
+        removeRuleIds: [ruleId]
+    })
+}
+
+async function unblockDomain(ruleId){
+    await browser.declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: [ruleId]
+    });
 }

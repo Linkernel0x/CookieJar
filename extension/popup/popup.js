@@ -88,22 +88,6 @@ async function updateTrustLevel(hostname, tab) {
     const sourcesTrustLevel = document.getElementById("resources");
     const formattedTime = new Date(value.timestamp).toLocaleString();
 
-    const renderStatus = (obj, type) => {
-        if (!obj || obj.status === "SKIPPED") return `<span style="color: #6c7086;">Disabled</span>`;
-        if (obj.status === "ERROR") return `<span style="color: #f38ba8;">Error/Unreachable</span>`;
-
-        if (type === "boolean") {
-            return obj.value ? `<span style="color: #f38ba8; font-weight: bold;">Malicious</span>` : `<span style="color: #a6e3a1;">Safe</span>`;
-        }
-        if (type === "count") {
-            return `<span style="color: #cba6f7;">${obj.value}</span>`;
-        }
-        if (type === "days") {
-            return obj.value !== null ? `<span style="color: #89b4fa;">${obj.value} days</span>` : `<span style="color: #f38ba8;">N/A</span>`;
-        }
-        return `<span style="color: #a6adc8;">${obj.value ?? 'N/A'}</span>`;
-    };
-
     if (sourcesTrustLevel) {
         sourcesTrustLevel.innerHTML = `
         <li>Google: <span style="float: right">${renderStatus(value.sources.googleSafeBrowsing, "boolean")}</span></li>

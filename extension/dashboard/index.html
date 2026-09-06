@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>CookieJar Security Suite - Dashboard</title>
+    <link rel="icon" href="../assets/icon.svg">
     <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
@@ -11,8 +12,66 @@
     <h1>CookieJar Dashboard</h1>
     <div class="card">
         <h2>Trust Level</h2>
+        <div class="row">
+            <div class="card" style="width: 200px; height: 200px;">
+                <div class="donut-container" style="position: relative; width: 200px; height: 200px;">
+                    <svg id="trust-history-chart" viewBox="0 0 42 42" style="width: 100%; height: 100%; transform: rotate(-90deg); border-radius: 50%;">
+
+                        <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#e6e6e6" stroke-width="5"></circle>
+
+                        <circle id="segment-blue" cx="21" cy="21" r="15.915" fill="transparent" stroke="#36a2eb" stroke-width="5"></circle>
+                        <circle id="segment-green" cx="21" cy="21" r="15.915" fill="transparent" stroke="#4bc0c0" stroke-width="5"></circle>
+                        <circle id="segment-yellow" cx="21" cy="21" r="15.915" fill="transparent" stroke="#ffce56" stroke-width="5"></circle>
+                        <circle id="segment-red" cx="21" cy="21" r="15.915" fill="transparent" stroke="#ff6384" stroke-width="5"></circle>
+                    </svg>
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: sans-serif; font-weight: bold; text-align: center;">
+                        Saved trust points: <span id="trust-total-label">0</span>
+                    </div>
+                </div>
+            </div>
+            <div class="card" style="width: 92%; display: flex; flex-direction: column; justify-content: center">
+                <span style="font-weight: bold">Total Trust Points</span>
+                <span id="trust-total">0</span>
+                <span style="font-weight: bold">Dangerous Sites Detected</span>
+                <span id="dangerous-total">0</span>
+                <span style="font-weight: bold">Enabled modules</span>
+                <ul id="enabled-modules"></ul>
+            </div>
+            <div class="card" style="width: 92%; display: flex; flex-direction: column; justify-content: center">
+                <span class="Highlight-Label">Worse Trust Score</span>
+                <span id="site" style="font-weight: bold; color: var(--text-main);">N/A</span><span id="score-tag" class="text-tag">0</span>
+                <ul id="sources" style="padding-left: 16px; margin: 8px 0 0 0; font-size: 0.85rem;"></ul>
+            </div>
+        </div>
+        <div class="card">
+            <h3><i class="fa-solid fa-history"></i> Recent Scanning History</h3>
+            <div id="trust-history-list" class="history-list"></div>
+        </div>
     </div>
 
+    <div class="card">
+        <h2>Storage Explorer</h2>
+
+        <div class="explorer-controls" style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
+            <select id="domain-select" class="input-select" style="flex: 1; min-width: 200px; padding: 8px; border-radius: 6px; background: var(--bg-input); color: var(--text-main); border: 1px solid #585b70;">
+                <option value="">Loading...</option>
+            </select>
+
+            <select id="scope-select" class="input-select" style="width: 160px; padding: 8px; border-radius: 6px; background: var(--bg-input); color: var(--text-main); border: 1px solid #585b70;">
+                <option value="cookies">Cookies</option>
+                <option value="localStorage">Local Storage</option>
+                <option value="sessionStorage">Session Storage</option>
+            </select>
+
+            <input type="text" id="explorer-search" placeholder="Search..." style="flex: 1; min-width: 180px; margin-top: 0;">
+        </div>
+
+        <div id="storage-explorer-list" class="history-list" style="max-height: 400px; min-height: 120px;">
+            <div style="text-align: center; color: var(--text-muted); padding: 20px;">Select a domain to explore data.</div>
+        </div>
+    </div>
+
+    <script src="../background/helpers.js"></script>
     <script src="../background/profile.js"></script>
     <script src="dashboard.js"></script>
 </body>

@@ -21,7 +21,7 @@ browser.downloads.onCreated.addListener(async (downloadItem) => {
 
         if (!settings.downloadScan?.enabled) return;
 
-        const apiKey = settings.downloadScan?.apiKey || settings.globalApiKey;
+        const apiKey = getVTApiKey(settings, "downloadScan");
         if (!apiKey) return;
 
         const isSafe = await checkDownloadUrlSafety(downloadItem.url, apiKey);
@@ -31,12 +31,7 @@ browser.downloads.onCreated.addListener(async (downloadItem) => {
             await browser.downloads.cancel(downloadItem.id);
             await browser.downloads.erase({ id: downloadItem.id });
 
-            browser.notifications.create({
-                type: "basic",
-                iconUrl: "icons/icon-48.png",
-                title: "CookieJar - Download Bloccato",
-                message: `File malevolo intercettato: ${downloadItem.filename}`
-            });
+            sendNotification("CookieJar - Download Blocked", `Malicious file detected: ${downloadItem.filename}`);
         }
     } catch (error) {
         console.error("[CookieJar] Error while handling download:", error);
@@ -65,6 +60,16 @@ async function checkDownloadUrlSafety(downloadUrl, apiKey) {
     }
 }
 
+async function getVTApiKey(vtSettings, moduleName) {
+        if (!vtSettings) return "";
+
+        const moduleKey = vtSettings[moduleName]?.apiKey;
+        if (moduleKey && moduleKey.trim() !== "") {
+            return moduleKey.trim();
+        }
+        return vtSettings.globalApiKey ? vtSettings.globalApiKey.trim() : "";
+    }
+
 browser.webNavigation.onCompleted.addListener(async (details) => {
     if (details.frameId !== 0) return;
 
@@ -72,25 +77,36 @@ browser.webNavigation.onCompleted.addListener(async (details) => {
         const url = details.url;
         if (!url.startsWith("http")) return;
 
-        const urlObj = new URL(url);
-        const hostname = urlObj.hostname;
+        const hostname = new URL(url).hostname;
+        const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 
         const storage = await browser.storage.local.get("CookieJar");
         const profileData = storage.CookieJar || new Profile().toJSON();
-        const trustPoints = profileData.trustPoints || {};
-        const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+        const currentPoints = profileData.trustPoints || {};
 
-        if (!trustPoints[hostname] || (Date.now() - trustPoints[hostname].timestamp > CACHE_TTL)) {
-            const score = await calculateScore(url, hostname, profileData);
+        let currentScoreObj = currentPoints[hostname];
 
-            const currentStorage = await browser.storage.local.get("CookieJar");
-            const currentProfile = currentStorage.CookieJar || profileData;
-            currentProfile.trustPoints = currentProfile.trustPoints || {};
-            currentProfile.trustPoints[hostname] = score;
+        if (!currentScoreObj || (Date.now() - currentScoreObj.timestamp > CACHE_TTL)) {
+            currentScoreObj = await calculateScore(url, hostname, profileData);
 
-            await browser.storage.local.set({ CookieJar: currentProfile });
-            console.log(`[CookieJar] Evaluated ${hostname}: ${score.score}`);
+            const freshStorage = await browser.storage.local.get("CookieJar");
+            const freshProfile = freshStorage.CookieJar || profileData;
+
+            if (!freshProfile.trustPoints) freshProfile.trustPoints = {};
+            freshProfile.trustPoints[hostname] = currentScoreObj;
+
+            await browser.storage.local.set({CookieJar: freshProfile});
+            console.log(`[CookieJar] Evaluated ${hostname}: ${currentScoreObj.score}`);
         }
+
+        if (currentScoreObj) {
+            renderBadge(currentScoreObj.score);
+        }
+
+        if (currentScoreObj.score <= 35) {
+            sendNotification("CookieJar - Low Trust Level", `The site ${hostname} has a low trust score of ${currentScoreObj.score}. Exercise caution.`);
+        }
+
     } catch (e) {
         console.error("[CookieJar] Navigation processing error:", e);
     }
