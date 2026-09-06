@@ -89,14 +89,22 @@ browser.webNavigation.onCompleted.addListener(async (details) => {
         if (!currentScoreObj || (Date.now() - currentScoreObj.timestamp > CACHE_TTL)) {
             currentScoreObj = await calculateScore(url, hostname, profileData);
 
-            const freshStorage = await browser.storage.local.get("CookieJar");
-            const freshProfile = freshStorage.CookieJar || profileData;
+            if (!profileData.trustPoints) profileData.trustPoints = {};
+            profileData.trustPoints[hostname] = currentScoreObj;
 
-            if (!freshProfile.trustPoints) freshProfile.trustPoints = {};
-            freshProfile.trustPoints[hostname] = currentScoreObj;
-
-            await browser.storage.local.set({CookieJar: freshProfile});
             console.log(`[CookieJar] Evaluated ${hostname}: ${currentScoreObj.score}`);
+        }
+
+        const ruleId = getRuleIdForDomain(hostname);
+        const lists = profileData.settings?.lists || { whitelist: [], blacklist: [] };
+        const apexDomain = getApexDomain(hostname);
+        const isBlacklisted = lists.blacklist.includes(hostname) || lists.blacklist.includes(apexDomain);
+        const isWhitelisted = lists.whitelist.includes(hostname) || lists.whitelist.includes(apexDomain);
+
+        if (currentScoreObj.score === 0 && profileData.settings?.misc?.autoBlockMaliciousSites || (isBlacklisted && !isWhitelisted)) {
+            await blockDomain(ruleId, hostname, profileData);
+        } else {
+            await unblockDomain(ruleId, hostname, profileData);
         }
 
         if (currentScoreObj) {

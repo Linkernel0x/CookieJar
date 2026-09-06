@@ -67,6 +67,13 @@ You can adjust:
 * VirusTotal evaluation options
 * notification preferences
 * visual badge rendering for the extension
+* if pages with 0 score points are loaded
+
+### Whitelist & Blacklist
+From the dashboard you can also put domains into one of these two categories:
+
+- **whitelist** whitelisted domains are forced to a 100 trust score
+- **blacklist** the domains are forced to a 0 trust score and are prevented from loading 
 
 ---
 
@@ -90,5 +97,4 @@ Upcoming improvements:
 * better UI polish and refinements
 * improved trust scoring logic
 * more robust handling of edge cases
-* expanded storage diagnostics
 * more utility tools for privacy and browser inspection

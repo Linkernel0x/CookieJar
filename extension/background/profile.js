@@ -3,7 +3,7 @@ class Profile {
         this.schemaVersion = schemaVersion;
         this.trustPoints = trustPoints;
         this.settings = settings || {
-            misc: { allowNotification: true, renderColorBadge: true },
+            misc: { allowNotification: true, renderColorBadge: true, autoBlockMaliciousSites: false },
             trust: {
                 googleSafeBrowsing: { apiKey: "", enabled: true },
                 urlScan: { apiKey: "", enabled: true },
@@ -15,7 +15,11 @@ class Profile {
                 globalApiKey: "",
                 trustLevel: { enabled: false, apiKey: ""},
                 downloadScan: { enabled: true, apiKey: "", minimumResults: 1}
-            }
+            },
+            lists: {
+                whitelist: [],
+                blacklist: []
+            },
         };
         this.frozenCookies = frozenCookies || {};
     }

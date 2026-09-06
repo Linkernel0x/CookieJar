@@ -53,18 +53,34 @@ async function calculateScore(urlToCheck, hostname, data) {
     const settings = data.settings || {};
     const trust = settings.trust || {};
 
+    const lists = data.settings?.lists || { whitelist: [], blacklist: [] };
+    const apexDomain = getApexDomain(hostname);
+
+    if (lists.whitelist.includes(hostname) || lists.whitelist.includes(apexDomain)) {
+        return { score: 100, timestamp: Date.now(), sources: { manualOverride: "Whitelist" } };
+    }
+
+    if (lists.blacklist.includes(hostname) || lists.blacklist.includes(apexDomain)) {
+        return { score: 0, timestamp: Date.now(), sources: { manualOverride: "Blacklist" } };
+    }
+
     const results = await Promise.allSettled([
-        trust.trancoRank?.enabled ? getTrancoRank(hostname) : Promise.resolve({ status: "SKIPPED", value: null }),
-        (trust.googleSafeBrowsing?.enabled && trust.googleSafeBrowsing.apiKey)
-            ? checkGoogleSafeBrowsing(urlToCheck, trust.googleSafeBrowsing.apiKey) : Promise.resolve({ status: "SKIPPED", value: null }),
-        (trust.AlienVaultOTX?.enabled && trust.AlienVaultOTX.apiKey)
-            ? getAlienVaultDomainInfo(hostname, trust.AlienVaultOTX.apiKey) : Promise.resolve({ status: "SKIPPED", value: null }),
-        trust.phishTank?.enabled ? checkPhishTank(urlToCheck, trust.phishTank.apiKey || "") : Promise.resolve({ status: "SKIPPED", value: null }),
-        trust.urlScan?.enabled ? checkUrlScan(hostname, trust.urlScan.apiKey || "") : Promise.resolve({ status: "SKIPPED", value: null }),
+        trust.trancoRank?.enabled ? getTrancoRank(hostname) : Promise.resolve({ status: "DISABLED", value: null }),
+        trust.googleSafeBrowsing?.enabled
+            ? (trust.googleSafeBrowsing.apiKey ? checkGoogleSafeBrowsing(urlToCheck, trust.googleSafeBrowsing.apiKey) : Promise.resolve({ status: "NO_KEY", value: null }))
+            : Promise.resolve({ status: "DISABLED", value: null }),
+        trust.AlienVaultOTX?.enabled
+            ? (trust.AlienVaultOTX.apiKey ? getAlienVaultDomainInfo(hostname, trust.AlienVaultOTX.apiKey) : Promise.resolve({ status: "NO_KEY", value: null }))
+            : Promise.resolve({ status: "DISABLED", value: null }),
+        trust.phishTank?.enabled ? checkPhishTank(urlToCheck, trust.phishTank.apiKey || "") : Promise.resolve({ status: "DISABLED", value: null }),
+        trust.urlScan?.enabled ? checkUrlScan(hostname, trust.urlScan.apiKey || "") : Promise.resolve({ status: "DISABLED", value: null }),
         checkOpenPhish(urlToCheck),
         getDomainAge(hostname),
         (settings.virustotal?.trustLevel?.enabled)
-            ? checkVirusTotalDomain(hostname, settings.virustotal.trustLevel.apiKey || settings.virustotal.globalApiKey) : Promise.resolve({ status: "SKIPPED", value: null })
+            ? (settings.virustotal.trustLevel.apiKey || settings.virustotal.globalApiKey
+                ? checkVirusTotalDomain(hostname, settings.virustotal.trustLevel.apiKey || settings.virustotal.globalApiKey)
+                : Promise.resolve({ status: "NO_KEY", value: null }))
+            : Promise.resolve({ status: "DISABLED", value: null })
     ]);
 
     const extractRes = (index) => results[index].status === "fulfilled" ? results[index].value : { status: "ERROR", value: null };
@@ -84,7 +100,9 @@ async function calculateScore(urlToCheck, hostname, data) {
 
     if (trancoRes.status === "SUCCESS") {
         if (trancoRes.value && trancoRes.value > 100000) baseScore -= 10;
-        if (!trancoRes.value) baseScore -= 20;
+        else if (!trancoRes.value) baseScore -= 20;
+    } else if (trancoRes.status !== "DISABLED") {
+        baseScore -= 20;
     }
 
     if (googleRes.status === "SUCCESS" && googleRes.value === true) baseScore -= 80;
@@ -317,7 +335,8 @@ async function checkOpenPhish(urlToCheck) {
 }
 
 const renderStatus = (obj, type) => {
-    if (!obj || obj.status === "SKIPPED") return `<span style="color: #6c7086;">Disabled</span>`;
+    if (!obj || obj.status === "DISABLED") return `<span style="color: #6c7086;">Disabled</span>`;
+    if (obj.status === "NO_KEY") return `<span style="color: #fab387;">No Key</span>`;
     if (obj.status === "ERROR") return `<span style="color: #f38ba8;">Error/Unreachable</span>`;
 
     if (type === "boolean") {
@@ -409,7 +428,10 @@ function getFrozenCookies(profile, domain) {
         }));
 }
 
-async function blockDomain(ruleId, domain){
+async function blockDomain(ruleId, domain, data){
+    if (data.trustPoints[domain]) {
+        data.trustPoints[domain].timestamp = 0;
+    }
     await browser.declarativeNetRequest.updateDynamicRules({
         addRules: [
             {
@@ -426,8 +448,20 @@ async function blockDomain(ruleId, domain){
     })
 }
 
-async function unblockDomain(ruleId){
+async function unblockDomain(ruleId, domain, data){
+    if (data.trustPoints[domain]) {
+        data.trustPoints[domain].timestamp = 0;
+    }
     await browser.declarativeNetRequest.updateDynamicRules({
         removeRuleIds: [ruleId]
     });
+}
+
+function getRuleIdForDomain(domain) {
+    let hash = 0;
+    for (let i = 0; i < domain.length; i++) {
+        hash = (hash << 5) - hash + domain.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash) + 1;
 }

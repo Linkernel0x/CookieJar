@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "CookieJar",
   "version": "1.0",
-  "description": "An extension to read, edit cookies, scan downloads and display trust levels",
+  "description": "An extension to read, edit cookies, scan downloads and display trust scores for websites.",
   "browser_specific_settings": {
     "gecko": {
       "id": "CookieJar@Linkernel0x",
@@ -26,6 +26,7 @@
   },
 
   "permissions": [
+    "declarativeNetRequest",
     "cookies",
     "webNavigation",
     "downloads",
@@ -34,6 +35,16 @@
     "activeTab",
     "scripting"
   ],
+
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "block_rules",
+        "enabled": true,
+        "path": "background/rules.json"
+      }
+    ]
+  },
 
   "host_permissions": [
     "<all_urls>"

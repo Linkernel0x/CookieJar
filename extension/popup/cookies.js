@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             renderList(currentItems);
         } catch (err) {
             console.error(err);
-            content.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--accent-red);">Impossibile leggere ${scope}.</div>`;
+            content.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--accent-red);">Could not read ${scope}. Open the dashboard to manage ${scope}.</div>`;
         }
     }
 
@@ -105,7 +105,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function renderList(itemsToRender) {
         content.innerHTML = "";
-
         if (itemsToRender.length === 0) {
             content.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-muted);">No element found.</div>`;
             return;

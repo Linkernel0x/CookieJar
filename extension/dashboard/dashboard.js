@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await renderHistoryTable(profile);
 
     await initStorageExplorer();
+    await initListManager();
 });
 
 async function renderTrustGraph(graph, trustPoints = {}) {
@@ -314,7 +315,7 @@ function renderExplorerList(itemsToRender) {
             const freezeBtn = document.createElement("button");
             freezeBtn.className = `btn ${item.isFrozen ? 'primary' : 'secondary'}`;
             freezeBtn.style.cssText = "padding: 6px 10px; font-size: 0.8rem;";
-            freezeBtn.innerHTML = `<i class="fa-solid ${item.isFrozen ? 'fa-snowflake' : 'fa-snowflake'}"></i> ${item.isFrozen ? 'Unfreeze' : 'Freeze'}`;
+            freezeBtn.innerHTML = `<i class="fa-solid ${item.isFrozen ? 'fa-snowflake' : 'fa-snowflake'}"></i> `;
 
             freezeBtn.addEventListener("click", async () => {
                 if (item.isFrozen) {
@@ -432,4 +433,101 @@ function renderExplorerList(itemsToRender) {
         itemEl.appendChild(actions);
         listContainer.appendChild(itemEl);
     });
+}
+
+async function initListManager() {
+    const wlInput = document.getElementById("whitelist-input");
+    const blInput = document.getElementById("blacklist-input");
+    const wlBtn = document.getElementById("add-whitelist-btn");
+    const blBtn = document.getElementById("add-blacklist-btn");
+
+    if (!wlInput || !blInput) return;
+
+    wlBtn?.addEventListener("click", async () => {
+        await addDomainToList(wlInput.value, "whitelist");
+        wlInput.value = "";
+    });
+
+    blBtn?.addEventListener("click", async () => {
+        await addDomainToList(blInput.value, "blacklist");
+        blInput.value = "";
+    });
+
+    renderLists();
+}
+
+async function addDomainToList(domain, listType) {
+    const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').split('/')[0];
+    if (!cleanDomain) return;
+
+    if (!profile.settings.lists) {
+        profile.settings.lists = { whitelist: [], blacklist: [] };
+    }
+
+    const targetList = profile.settings.lists[listType];
+
+    if (!targetList.includes(cleanDomain)) {
+        targetList.push(cleanDomain);
+        const oppositeType = listType === "whitelist" ? "blacklist" : "whitelist";
+
+        profile.settings.lists[oppositeType] = profile.settings.lists[oppositeType].filter(d => d !== cleanDomain);
+
+        if (profile.trustPoints[cleanDomain]) {
+            delete profile.trustPoints[cleanDomain];
+        }
+
+        await browser.storage.local.set({ CookieJar: profile.toJSON() });
+        renderLists();
+    }
+}
+
+async function removeDomainFromList(domain, listType) {
+    if (!profile.settings?.lists?.[listType]) return;
+
+    profile.settings.lists[listType] = profile.settings.lists[listType].filter(d => d !== domain);
+    await browser.storage.local.set({ CookieJar: profile.toJSON() });
+    renderLists();
+}
+
+function renderLists() {
+    const wlContainer = document.getElementById("whitelist-list");
+    const blContainer = document.getElementById("blacklist-list");
+
+    const lists = profile.settings?.lists || { whitelist: [], blacklist: [] };
+
+    const populateContainer = (container, items, listType) => {
+        if (!container) return;
+        container.innerHTML = "";
+
+        if (!items || items.length === 0) {
+            container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 12px;">No domains added</div>`;
+            return;
+        }
+
+        items.forEach(domain => {
+            const itemEl = document.createElement("div");
+            itemEl.className = "history-item";
+            itemEl.style.padding = "8px 12px";
+
+            const span = document.createElement("span");
+            span.className = "history-domain";
+            span.textContent = domain;
+
+            const deleteBtn = document.createElement("button");
+            deleteBtn.className = "btn crucial";
+            deleteBtn.style.cssText = "padding: 4px 8px; font-size: 0.75rem;";
+            deleteBtn.innerHTML = `<i class="fa-solid fa-trash-can"></i>`;
+
+            deleteBtn.addEventListener("click", async () => {
+                await removeDomainFromList(domain, listType);
+            });
+
+            itemEl.appendChild(span);
+            itemEl.appendChild(deleteBtn);
+            container.appendChild(itemEl);
+        });
+    };
+
+    populateContainer(wlContainer, lists.whitelist, "whitelist");
+    populateContainer(blContainer, lists.blacklist, "blacklist");
 }

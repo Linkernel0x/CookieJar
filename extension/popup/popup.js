@@ -117,7 +117,26 @@ async function forceTrustFetch(tab) {
         profileData.trustPoints[urlObj.hostname] = score;
 
         await browser.storage.local.set({CookieJar: profileData});
+
+        renderBadge(score.score);
+
+        const ruleId = getRuleIdForDomain(urlObj.hostname);
+        const lists = profileData.settings?.lists || { whitelist: [], blacklist: [] };
+        const apexDomain = getApexDomain(urlObj.hostname);
+        const isBlacklisted = lists.blacklist.includes(urlObj.hostname) || lists.blacklist.includes(apexDomain);
+        const isWhitelisted = lists.whitelist.includes(urlObj.hostname) || lists.whitelist.includes(apexDomain);
+
+        if (score.score === 0 && profileData.settings?.misc?.autoBlockMaliciousSites || (isBlacklisted && !isWhitelisted)) {
+            await blockDomain(ruleId, urlObj.hostname, profileData);
+        } else {
+            await unblockDomain(ruleId, urlObj.hostname, profileData);
+        }
+
+        if (score.score <= 35) {
+            sendNotification("CookieJar - Low Trust Level", `The site ${urlObj.hostname} has a low trust score of ${urlObj.score}. Exercise caution.`);
+        }
     } catch (e) {
+
         console.error("[CookieJar] Refetch error:", e);
     }
 }
