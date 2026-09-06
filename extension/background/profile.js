@@ -1,9 +1,12 @@
 class Profile {
-    constructor(schemaVersion = 1, trustPoints = {}, settings = null, frozenCookies = {}) {
+    constructor(schemaVersion = 1, trustPoints = {}, trustHistory = {}, settings = null, frozenCookies = {}) {
         this.schemaVersion = schemaVersion;
         this.trustPoints = trustPoints;
+        this.trustHistory = trustHistory;
         this.settings = settings || {
-            misc: { allowNotification: true, renderColorBadge: true, autoBlockMaliciousSites: false },
+            misc: { allowNotification: true,
+                renderColorBadge: true,
+                autoBlockMaliciousSites: -1 },
             trust: {
                 googleSafeBrowsing: { apiKey: "", enabled: true },
                 urlScan: { apiKey: "", enabled: true },
@@ -26,13 +29,14 @@ class Profile {
 
     static fromJSON(json) {
         if (!json) return new Profile();
-        return new Profile(json.schemaVersion ?? 1, json.trustPoints ?? {}, json.settings ?? new Profile().settings, json.frozenCookies ?? {});
+        return new Profile(json.schemaVersion ?? 1, json.trustPoints ?? {}, json.trustHistory ?? {}, json.settings ?? new Profile().settings, json.frozenCookies ?? {});
     }
 
     toJSON() {
         return {
             schemaVersion: this.schemaVersion,
             trustPoints: this.trustPoints,
+            trustHistory: this.trustHistory,
             settings: this.settings,
             frozenCookies: this.frozenCookies
         };

@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (currentTab && currentTab.url && currentTab.url.startsWith("http")) {
             const url = new URL(currentTab.url);
-            domainQuery = `?domain=${encodeURIComponent(url.hostname)}`;
+            domainQuery = `?domain=${encodeURIComponent(url.hostname)}&tabId=${currentTab.id}`;
         }
 
         browser.windows.create({
@@ -102,7 +102,7 @@ async function updateTrustLevel(hostname, tab) {
         `;
     }
 
-    renderBadge(value.score);
+    renderBadge(value.score, tab.tabId);
 }
 
 async function forceTrustFetch(tab) {
@@ -115,10 +115,12 @@ async function forceTrustFetch(tab) {
 
         profileData.trustPoints = profileData.trustPoints || {};
         profileData.trustPoints[urlObj.hostname] = score;
+        profileData.trustHistory[urlObj.hostname] = profileData.trustHistory[urlObj.hostname] || [];
+        profileData.trustHistory[urlObj.hostname].push(score);
 
         await browser.storage.local.set({CookieJar: profileData});
 
-        renderBadge(score.score);
+        renderBadge(score.score, tab.tabId);
 
         const ruleId = getRuleIdForDomain(urlObj.hostname);
         const lists = profileData.settings?.lists || { whitelist: [], blacklist: [] };
@@ -126,14 +128,14 @@ async function forceTrustFetch(tab) {
         const isBlacklisted = lists.blacklist.includes(urlObj.hostname) || lists.blacklist.includes(apexDomain);
         const isWhitelisted = lists.whitelist.includes(urlObj.hostname) || lists.whitelist.includes(apexDomain);
 
-        if (score.score === 0 && profileData.settings?.misc?.autoBlockMaliciousSites || (isBlacklisted && !isWhitelisted)) {
+        if ((score.score === 0 || (isBlacklisted && !isWhitelisted)) || (profileData.settings?.misc?.autoBlockMaliciousSites >= score.score)) {
             await blockDomain(ruleId, urlObj.hostname, profileData);
         } else {
             await unblockDomain(ruleId, urlObj.hostname, profileData);
         }
 
         if (score.score <= 35) {
-            sendNotification("CookieJar - Low Trust Level", `The site ${urlObj.hostname} has a low trust score of ${urlObj.score}. Exercise caution.`);
+            sendNotification("CookieJar - Low Trust Level", `The site ${urlObj.hostname} has a low trust score of ${score.score}. Exercise caution.`);
         }
     } catch (e) {
 

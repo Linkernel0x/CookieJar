@@ -16,7 +16,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentDomain = urlParams.get("domain");
 
         const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-        if (tab) activeTabId = tab.id;
+        activeTabId = parseInt(urlParams.get("tabId"), 10);
 
         if (!currentDomain && tab?.url) {
             try {

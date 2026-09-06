@@ -13,24 +13,22 @@ async function sendNotification(title, message) {
     }
 }
 
-async function renderBadge(value) {
+async function renderBadge(value, targetTabId = null) {
     const storage = await browser.storage.local.get("CookieJar");
     const profileData = storage.CookieJar || new Profile().toJSON();
     const allow_badge = profileData.settings?.misc?.renderColorBadge;
 
+    const tabId = targetTabId || await getCurrentTabId();
+
     if (!allow_badge) {
-        const tabId = await getCurrentTabId();
         browser.action.setBadgeText({ text: "", tabId: tabId });
         return;
     }
 
     let color = "#a6adc8";
-
     if (value <= 35) color = "#f38ba8";
     else if (value <= 65) color = "#fab387";
     else if (value <= 100) color = "#a6e3a1";
-
-    const tabId = await getCurrentTabId();
 
     browser.action.setBadgeText({
         text: (value !== null && value !== undefined) ? value.toString() : "N/A",
@@ -394,21 +392,26 @@ async function unfreezeCookie(profile, freezeId) {
     const protocol = c.secure ? "https://" : "http://";
     const cookieUrl = `${protocol}${frozenItem.domain}${c.path}`;
 
-    await browser.cookies.set({
+    const cookieToSet = {
         url: cookieUrl,
         name: c.name,
         value: c.value,
-        domain: c.domain,
         path: c.path,
         secure: c.secure,
         httpOnly: c.httpOnly,
         sameSite: c.sameSite,
-        expirationDate: c.expirationDate,
         storeId: c.storeId
-    });
+    };
 
+    if (!c.hostOnly && c.domain) {
+        cookieToSet.domain = c.domain;
+    }
+    if (c.expirationDate) {
+        cookieToSet.expirationDate = c.expirationDate;
+    }
+
+    await browser.cookies.set(cookieToSet);
     delete profile.frozenCookies[freezeId];
-
     await browser.storage.local.set({ CookieJar: profile.toJSON() });
     return true;
 }
@@ -424,6 +427,14 @@ function getFrozenCookies(profile, domain) {
             isFrozen: true,
             freezeId: frozen.id,
             frozenAt: frozen.frozenAt,
+            domain: frozen.originalCookie.domain,
+            path: frozen.originalCookie.path,
+            secure: frozen.originalCookie.secure,
+            httpOnly: frozen.originalCookie.httpOnly,
+            sameSite: frozen.originalCookie.sameSite,
+            hostOnly: frozen.originalCookie.hostOnly,
+            expirationDate: frozen.originalCookie.expirationDate,
+            session: frozen.originalCookie.session,
             raw: frozen.originalCookie
         }));
 }

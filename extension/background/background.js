@@ -40,11 +40,9 @@ browser.downloads.onCreated.addListener(async (downloadItem) => {
 
 async function checkDownloadUrlSafety(downloadUrl, apiKey) {
     try {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(downloadUrl);
-        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const urlId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        const bytes = new TextEncoder().encode(downloadUrl);
+        const base64 = btoa(String.fromCharCode(...bytes));
+        const urlId = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
         const response = await fetch(`https://www.virustotal.com/api/v3/urls/${urlId}`, {
             method: "GET",
@@ -91,6 +89,8 @@ browser.webNavigation.onCompleted.addListener(async (details) => {
 
             if (!profileData.trustPoints) profileData.trustPoints = {};
             profileData.trustPoints[hostname] = currentScoreObj;
+            if (!profileData.trustHistory[hostname]) profileData.trustHistory[hostname] = [];
+            profileData.trustHistory[hostname].push(currentScoreObj)
 
             console.log(`[CookieJar] Evaluated ${hostname}: ${currentScoreObj.score}`);
         }
@@ -101,14 +101,14 @@ browser.webNavigation.onCompleted.addListener(async (details) => {
         const isBlacklisted = lists.blacklist.includes(hostname) || lists.blacklist.includes(apexDomain);
         const isWhitelisted = lists.whitelist.includes(hostname) || lists.whitelist.includes(apexDomain);
 
-        if (currentScoreObj.score === 0 && profileData.settings?.misc?.autoBlockMaliciousSites || (isBlacklisted && !isWhitelisted)) {
+        if ((currentScoreObj.score === 0 || (isBlacklisted && !isWhitelisted)) || (profileData.settings?.misc?.autoBlockMaliciousSites >= currentScoreObj.score)) {
             await blockDomain(ruleId, hostname, profileData);
         } else {
             await unblockDomain(ruleId, hostname, profileData);
         }
 
         if (currentScoreObj) {
-            renderBadge(currentScoreObj.score);
+            renderBadge(currentScoreObj.score, details.tabId);
         }
 
         if (currentScoreObj.score <= 35) {
@@ -117,5 +117,27 @@ browser.webNavigation.onCompleted.addListener(async (details) => {
 
     } catch (e) {
         console.error("[CookieJar] Navigation processing error:", e);
+    }
+});
+
+browser.tabs.onActivated.addListener(async (activeInfo) => {
+    try {
+        const tab = await browser.tabs.get(activeInfo.tabId);
+        if (!tab.url || !tab.url.startsWith("http")) {
+            browser.action.setBadgeText({ text: "", tabId: activeInfo.tabId });
+            return;
+        }
+        const hostname = new URL(tab.url).hostname;
+        const storage = await browser.storage.local.get("CookieJar");
+        const trustPoints = storage.CookieJar?.trustPoints || {};
+        const siteData = trustPoints[hostname];
+
+        if (siteData) {
+            renderBadge(siteData.score, activeInfo.tabId)
+        } else {
+            browser.action.setBadgeText({ text: "N/A", tabId: activeInfo.tabId })
+        }
+    } catch (e) {
+        console.error("[CookieJar] Error handling tab activation: ", e)
     }
 });

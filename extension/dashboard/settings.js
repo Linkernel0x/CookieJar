@@ -44,7 +44,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         fileInput.click();
     });
 
-    const data = await browser.storage.local.get("CookieJar");
+    const data = await browser.storage.local.get("CookieJar") || {};
     await loadMisc(data);
     await loadTrustSettings(data);
     await loadVirusTotalSettings(data);
@@ -67,22 +67,38 @@ async function loadMisc(data) {
         label.style.gap = "8px";
         label.style.cursor = "pointer";
 
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.id = `setting-${key}`;
-        checkbox.checked = !!value;
+        if (typeof value === "boolean") {
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.id = `setting-${key}`;
+            checkbox.checked = !!value;
+
+            label.appendChild(checkbox);
+
+            checkbox.addEventListener("change", async (e) => {
+                profile.settings.misc[key] = e.target.checked;
+                await browser.storage.local.set({CookieJar: profile.toJSON()});
+            });
+        } else if (typeof value === "number") {
+            const numberInput = document.createElement("input");
+            numberInput.type = "number";
+            numberInput.id = `setting-${key}`;
+            numberInput.min = "-1"
+            numberInput.value = value ?? -1;
+
+            label.appendChild(numberInput);
+
+            numberInput.addEventListener("change", async (e) => {
+                profile.settings.misc[key] = parseInt(e.target.value, 10);
+                await browser.storage.local.set({CookieJar: profile.toJSON()});
+            });
+        }
 
         const textNode = document.createTextNode(key);
-
-        label.appendChild(checkbox);
         label.appendChild(textNode);
         row.appendChild(label);
         miscContainer.appendChild(row);
 
-        checkbox.addEventListener("change", async (e) => {
-            profile.settings.misc[key] = e.target.checked;
-            await browser.storage.local.set({ CookieJar: profile.toJSON() });
-        });
     });
 }
 

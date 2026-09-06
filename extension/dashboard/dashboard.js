@@ -9,13 +9,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.location.href = "settings.html";
     });
 
+    document.getElementById("history-view-mode").value = "latest";
+
     const graph1 = document.getElementById('trust-history-chart');
     await renderTrustGraph(graph1, profile.trustPoints || {});
     await renderTrustHighlights(profile);
-    await renderHistoryTable(profile);
 
     await initStorageExplorer();
     await initListManager();
+    await initHistoryControls(profile);
 });
 
 async function renderTrustGraph(graph, trustPoints = {}) {
@@ -116,49 +118,114 @@ async function renderTrustHighlights(profile) {
     }
 }
 
-async function renderHistoryTable(profile) {
+async function initHistoryControls() {
+    const viewModeSelect = document.getElementById("history-view-mode");
+    const domainFilterContainer = document.getElementById("domain-history-filter");
+    const historyDomainSelect = document.getElementById("history-domain-select");
+
+    if (!viewModeSelect || !domainFilterContainer) return;
+
+    viewModeSelect.addEventListener("change", (e) => {
+        let currentHistoryViewMode = e.target.value;
+        if (currentHistoryViewMode === "domainHistory") {
+            domainFilterContainer.style.display = "block";
+            populateHistoryDomainSelect();
+        } else {
+            domainFilterContainer.style.display = "none";
+            renderLatestTable(profile);
+        }
+    });
+
+    historyDomainSelect?.addEventListener("change", (e) => {
+        const domain = e.target.value;
+        renderSingleDomainHistory(profile, domain);
+    });
+
+    renderLatestTable(profile);
+}
+
+function populateHistoryDomainSelect() {
+    const select = document.getElementById("history-domain-select");
+    if (!select) return;
+
+    const domains = Object.keys(profile.trustHistory || {}).sort();
+    if (domains.length === 0) {
+        select.innerHTML = `<option value="">No history found</option>`;
+        return;
+    }
+
+    select.innerHTML = `<option value="">Select a domain...</option>` +
+        domains.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+}
+
+async function renderLatestTable(profile) {
     const historyContainer = document.getElementById('trust-history-list');
     if (!historyContainer) return;
 
     const trustEntries = Object.entries(profile.trustPoints || {});
 
     if (trustEntries.length === 0) {
-        historyContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 16px;">No history recorded yet.</div>`;
+        historyContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 16px;">No scan found.</div>`;
         return;
     }
 
     trustEntries.sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
 
-    historyContainer.innerHTML = trustEntries.map(([domain, data]) => {
-        let badgeColor = data.score <= 35 ? "var(--accent-red)" : data.score <= 65 ? "var(--accent-orange)" : "var(--accent-green)";
-        let badgeBg = data.score <= 35 ? "rgba(243, 139, 168, 0.15)" : data.score <= 65 ? "rgba(250, 179, 135, 0.15)" : "rgba(166, 227, 161, 0.15)";
-        const dateStr = data.timestamp ? new Date(data.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : 'Unknown';
-        const sources = data.sources || {};
+    historyContainer.innerHTML = trustEntries.map(([domain, data]) => renderHistoryItemMarkup(domain, data)).join('');
+}
 
-        return `
-            <div class="history-item">
-                <div class="history-info">
-                    <details>
-                        <summary><span class="history-domain">${domain}</span></summary>
-                        <ul style="padding-left: 16px; margin-top: 8px; font-size: 0.85rem;">
-                            <li>Google: <span style="float: right">${renderStatus(sources.googleSafeBrowsing, "boolean")}</span></li>
-                            <li>Alien Vault: <span style="float: right">${renderStatus(sources.alienVaultOTX, "count")} pulses</span></li>
-                            <li>PhishTank: <span style="float: right">${renderStatus(sources.phishTank, "boolean")}</span></li>
-                            <li>URLScan: <span style="float: right">${renderStatus(sources.urlScan, "boolean")}</span></li>
-                            <li>OpenPhish: <span style="float: right">${renderStatus(sources.openPhish, "boolean")}</span></li>
-                            <li>Tranco Rank: <span style="float: right">${renderStatus(sources.trancoRank, "text")}</span></li>
-                            <li>Domain Age: <span style="float: right">${renderStatus(sources.domainAgeDays, "days")}</span></li>
-                            <li>VirusTotal: <span style="float: right">${renderStatus(sources.virusTotal, "count")}</span></li>
-                        </ul>
-                    </details>
-                    <span class="history-date"><i class="fa-regular fa-clock"></i> ${dateStr}</span>
-                </div>
-                <div class="history-score" style="color: ${badgeColor}; background: ${badgeBg}; border: 1px solid ${badgeColor}40;">
-                    ${data.score} / 100
-                </div>
+function renderSingleDomainHistory(profile, domain) {
+    const historyContainer = document.getElementById('trust-history-list');
+    if (!historyContainer) return;
+
+    if (!domain || !profile.trustHistory?.[domain]) {
+        historyContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 16px;">Select a domain for complete history</div>`;
+        return;
+    }
+
+    const domainScans = profile.trustHistory[domain];
+
+    if (domainScans.length === 0) {
+        historyContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 16px;">No history found for this domain.</div>`;
+        return;
+    }
+
+    const sortedScans = [...domainScans].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    historyContainer.innerHTML = sortedScans.map(scanData => renderHistoryItemMarkup(domain, scanData)).join('');
+}
+
+function renderHistoryItemMarkup(domain, data) {
+    let badgeColor = data.score <= 35 ? "var(--accent-red)" : data.score <= 65 ? "var(--accent-orange)" : "var(--accent-green)";
+    let badgeBg = data.score <= 35 ? "rgba(243, 139, 168, 0.15)" : data.score <= 65 ? "rgba(250, 179, 135, 0.15)" : "rgba(166, 227, 161, 0.15)";
+    const dateStr = data.timestamp ? new Date(data.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : 'Unknown';
+    const sources = data.sources || {};
+
+    return `
+        <div class="history-item" style="margin-bottom: 8px;">
+            <div class="history-info">
+                <details>
+                    <summary style="cursor: pointer;">
+                        <span class="history-domain">${escapeHtml(domain)}</span>
+                        <span class="history-date" style="margin-left: 8px;"><i class="fa-regular fa-clock"></i> ${dateStr}</span>
+                    </summary>
+                    <ul style="padding-left: 16px; margin-top: 8px; font-size: 0.85rem; list-style: none;">
+                        <li>Google: <span style="float: right">${renderStatus(sources.googleSafeBrowsing, "boolean")}</span></li>
+                        <li>Alien Vault: <span style="float: right">${renderStatus(sources.alienVaultOTX, "count")} pulses</span></li>
+                        <li>PhishTank: <span style="float: right">${renderStatus(sources.phishTank, "boolean")}</span></li>
+                        <li>URLScan: <span style="float: right">${renderStatus(sources.urlScan, "boolean")}</span></li>
+                        <li>OpenPhish: <span style="float: right">${renderStatus(sources.openPhish, "boolean")}</span></li>
+                        <li>Tranco Rank: <span style="float: right">${renderStatus(sources.trancoRank, "text")}</span></li>
+                        <li>Domain Age: <span style="float: right">${renderStatus(sources.domainAgeDays, "days")}</span></li>
+                        <li>VirusTotal: <span style="float: right">${renderStatus(sources.virusTotal, "count")}</span></li>
+                    </ul>
+                </details>
             </div>
-        `;
-    }).join('');
+            <div class="history-score" style="color: ${badgeColor}; background: ${badgeBg}; border: 1px solid ${badgeColor}40;">
+                ${data.score} / 100
+            </div>
+        </div>
+    `;
 }
 
 //
@@ -212,7 +279,7 @@ async function updateExplorer() {
 
     if (!domain) return;
 
-    listContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">Caricamento ${scope}...</div>`;
+    listContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">Loading ${scope}...</div>`;
 
     try {
         if (scope === "cookies") {
@@ -221,6 +288,14 @@ async function updateExplorer() {
                 key: c.name,
                 value: c.value,
                 isFrozen: false,
+                domain: c.domain,
+                path: c.path,
+                secure: c.secure,
+                httpOnly: c.httpOnly,
+                sameSite: c.sameSite,
+                hostOnly: c.hostOnly,
+                expirationDate: c.expirationDate,
+                session: c.session,
                 raw: c
             }));
             const frozenItems = getFrozenCookies(profile, domain);
@@ -244,6 +319,7 @@ async function updateExplorer() {
                     </div>
                 `;
                 document.getElementById("open-tab-btn")?.addEventListener("click", () => {
+                    window.location.reload();
                     browser.tabs.create({ url: `https://${domain}` });
                 });
                 return;
@@ -268,7 +344,7 @@ async function updateExplorer() {
         renderExplorerList(currentExplorerItems);
     } catch (err) {
         console.error(err);
-        listContainer.innerHTML = `<div style="text-align: center; color: var(--accent-red); padding: 20px;">Errore nella lettura di ${scope}.</div>`;
+        listContainer.innerHTML = `<div style="text-align: center; color: var(--accent-red); padding: 20px;">Error while reading ${scope}</div>`;
     }
 }
 
@@ -277,7 +353,7 @@ function renderExplorerList(itemsToRender) {
     listContainer.innerHTML = "";
 
     if (itemsToRender.length === 0) {
-        listContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">Nessun elemento trovato.</div>`;
+        listContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 20px;">No element found</div>`;
         return;
     }
 
@@ -297,16 +373,43 @@ function renderExplorerList(itemsToRender) {
         info.className = "history-info";
         info.style.cssText = "overflow: hidden; text-overflow: ellipsis; max-width: 60%;";
 
-        const updateDisplay = (val) => {
-            info.innerHTML = `
+        const updateDisplay = (val, cookie_item) => {
+            if (!cookie_item) {
+                info.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span class="history-domain">${escapeHtml(item.key)}</span>
                     ${item.isFrozen ? '<span class="text-tag" style="background: var(--accent-blue); color: #11111b; font-size: 0.7rem;">FROZEN</span>' : ''}
                 </div>
                 <span style="font-size: 0.85rem; color: var(--accent-blue); word-break: break-all;">${escapeHtml(val)}</span>
             `;
+            } else {
+                const dateStr = cookie_item.expirationDate ? new Date(cookie_item.expirationDate).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : 'Unknown';
+                info.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="history-domain">${escapeHtml(item.key)}</span>
+                    ${item.isFrozen ? '<span class="text-tag" style="background: var(--accent-blue); color: #11111b; font-size: 0.7rem;">FROZEN</span>' : ''}
+                </div>
+                <span style="font-size: 0.85rem; color: var(--accent-blue); word-break: break-all;">${escapeHtml(val)}</span>
+                <details style="width: 400px">
+                    <summary style="cursor: pointer;">
+                        <span class="history-domain">Cookie details</span>
+                    </summary>
+                    <ul style="padding-left: 16px; margin-top: 8px; font-size: 0.85rem; list-style: none;">
+                        <li>Domain: <span style="float: right">${cookie_item.domain}</span></li>
+                        <li>Path: <span style="float: right">${cookie_item.path}</span></li>
+                        <li>Secure: <span style="float: right">${cookie_item.secure}</span></li>
+                        <li>httpOnly: <span style="float: right">${cookie_item.httpOnly}</span></li>
+                        <li>sameSite: <span style="float: right">${cookie_item.sameSite}</span></li>
+                        <li>hostOnly: <span style="float: right">${cookie_item.hostOnly}</span></li>
+                        <li>session: <span style="float: right">${cookie_item.session}</span></li>
+                        <li>expirationDate: <span style="float: right">${cookie_item.expirationDate}</span></li>
+                        <span class="history-date" style="margin-left: 8px;"><i class="fa-regular fa-clock"></i> ${dateStr}</span>
+                    </ul>
+                </details>
+            `;
+            }
         };
-        updateDisplay(item.value);
+        updateDisplay(item.value, item);
 
         const actions = document.createElement("div");
         actions.style.cssText = "display: flex; gap: 6px; align-items: center;";
@@ -394,7 +497,7 @@ function renderExplorerList(itemsToRender) {
                 item.value = newValue;
                 saveBtn.remove();
                 editBtn.style.display = "inline-block";
-                updateDisplay(item.value);
+                updateDisplay(item.value, item);
             });
         });
 
