@@ -16,7 +16,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentDomain = urlParams.get("domain");
 
         const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-        activeTabId = parseInt(urlParams.get("tabId"), 10);
+        const tabIdParam = parseInt(urlParams.get("tabId"), 10);
+        if (!isNaN(tabIdParam)) {
+            activeTabId = tabIdParam;
+        } else if (tab) {
+            activeTabId = tab.id;
+        }
 
         if (!currentDomain && tab?.url) {
             try {
@@ -87,20 +92,25 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function getWebStorageItems(type) {
         if (!activeTabId) return [];
-        const [{ result }] = await browser.scripting.executeScript({
-            target: { tabId: activeTabId },
-            func: (storageType) => {
-                const store = window[storageType];
-                const items = [];
-                for (let i = 0; i < store.length; i++) {
-                    const key = store.key(i);
-                    items.push({ key, value: store.getItem(key) });
-                }
-                return items;
-            },
-            args: [type]
-        });
-        return result || [];
+        try {
+            const [{ result }] = await browser.scripting.executeScript({
+                target: { tabId: activeTabId },
+                func: (storageType) => {
+                    const store = window[storageType];
+                    const items = [];
+                    for (let i = 0; i < store.length; i++) {
+                        const key = store.key(i);
+                        items.push({ key, value: store.getItem(key) });
+                    }
+                    return items;
+                },
+                args: [type]
+            });
+            return result || [];
+        } catch (e) {
+            console.error(`[CookieJar] Failed to retrieve ${type}:`, e);
+            return [];
+        }
     }
 
     function renderList(itemsToRender) {

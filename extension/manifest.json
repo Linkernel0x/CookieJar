@@ -29,8 +29,11 @@
     "declarativeNetRequest",
     "cookies",
     "webNavigation",
+    "webRequest",
+    "webRequestBlocking",
     "downloads",
     "storage",
+    "tabs",
     "notifications",
     "activeTab",
     "scripting"

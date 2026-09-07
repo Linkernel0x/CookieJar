@@ -40,9 +40,12 @@ browser.downloads.onCreated.addListener(async (downloadItem) => {
 
 async function checkDownloadUrlSafety(downloadUrl, apiKey) {
     try {
-        const bytes = new TextEncoder().encode(downloadUrl);
-        const base64 = btoa(String.fromCharCode(...bytes));
-        const urlId = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const encoder = new TextEncoder();
+        const data = encoder.encode(downloadUrl);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashBase64 = btoa(String.fromCharCode(...hashArray));
+        const urlId = hashBase64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
         const response = await fetch(`https://www.virustotal.com/api/v3/urls/${urlId}`, {
             method: "GET",
@@ -59,14 +62,76 @@ async function checkDownloadUrlSafety(downloadUrl, apiKey) {
 }
 
 async function getVTApiKey(vtSettings, moduleName) {
-        if (!vtSettings) return "";
+    if (!vtSettings) return "";
 
-        const moduleKey = vtSettings[moduleName]?.apiKey;
-        if (moduleKey && moduleKey.trim() !== "") {
-            return moduleKey.trim();
-        }
-        return vtSettings.globalApiKey ? vtSettings.globalApiKey.trim() : "";
+    const moduleKey = vtSettings[moduleName]?.apiKey;
+    if (moduleKey && moduleKey.trim() !== "") {
+        return moduleKey.trim();
     }
+    return vtSettings.globalApiKey ? vtSettings.globalApiKey.trim() : "";
+}
+
+const domainNetworkData = {};
+
+browser.webRequest.onResponseStarted.addListener(
+    async (details) => {
+        if (details.tabId === -1) return;
+
+        try {
+            const reqUrl = new URL(details.url);
+            const domainKey = reqUrl.hostname;
+            const cleanDomain = getApexDomain ? getApexDomain(domainKey) : domainKey;
+
+            if (!domainNetworkData[cleanDomain]) {
+                domainNetworkData[cleanDomain] = {
+                    ip: details.ip || "Unknown",
+                    protocol: reqUrl.protocol.replace(":", "").toUpperCase(),
+                    externalDomains: new Set(),
+                    webSockets: new Set(),
+                    requestsCount: 0,
+                    securityHeaders: {}
+                };
+            }
+
+            domainNetworkData[cleanDomain].requestsCount++;
+            if (details.ip) domainNetworkData[cleanDomain].ip = details.ip;
+
+            const headers = details.responseHeaders || [];
+            const headerMap = {};
+            headers.forEach(h => {
+                headerMap[h.name.toLowerCase()] = h.value;
+            });
+
+            domainNetworkData[cleanDomain].securityHeaders = {
+                hsts: !!headerMap['strict-transport-security'],
+                csp: !!headerMap['content-security-policy'],
+                xframe: headerMap['x-frame-options'] || null,
+                xcontent: headerMap['x-content-type-options'] === 'nosniff',
+                referrerPolicy: headerMap['referrer-policy'] || null
+            };
+        } catch (e) {
+            console.error("[CookieJar] Error parsing response network info:", e);
+        }
+    },
+    { urls: ["<all_urls>"] },
+    ["responseHeaders"]
+);
+
+async function blockDomain(ruleId, domain, profileData) {
+    if (!ruleId) return;
+
+    if (browser.declarativeNetRequest) {
+        await browser.declarativeNetRequest.updateDynamicRules({
+            addRules: [{
+                id: ruleId,
+                priority: 1,
+                action: { type: "block" },
+                condition: { urlFilter: `||${domain}^`, resourceTypes: ["main_frame"] }
+            }],
+            removeRuleIds: [ruleId]
+        });
+    }
+}
 
 browser.webNavigation.onCompleted.addListener(async (details) => {
     if (details.frameId !== 0) return;
@@ -79,29 +144,40 @@ browser.webNavigation.onCompleted.addListener(async (details) => {
         const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 
         const storage = await browser.storage.local.get("CookieJar");
-        const profileData = storage.CookieJar || new Profile().toJSON();
+        if (!storage.CookieJar) return;
+
+        const profileInstance = Profile.fromJSON(storage.CookieJar);
+        const profileData = profileInstance.toJSON();
         const currentPoints = profileData.trustPoints || {};
 
         let currentScoreObj = currentPoints[hostname];
 
-        if (!currentScoreObj || (Date.now() - currentScoreObj.timestamp > CACHE_TTL)) {
-            currentScoreObj = await calculateScore(url, hostname, profileData);
+        if (!currentScoreObj || (Date.now() - (currentScoreObj.timestamp || 0) > CACHE_TTL)) {
+            currentScoreObj = await calculateScore(url, hostname, profileInstance);
 
-            if (!profileData.trustPoints) profileData.trustPoints = {};
-            profileData.trustPoints[hostname] = currentScoreObj;
-            if (!profileData.trustHistory[hostname]) profileData.trustHistory[hostname] = [];
-            profileData.trustHistory[hostname].push(currentScoreObj)
+            if (!profileInstance.trustPoints) profileInstance.trustPoints = {};
+            if (!profileInstance.trustHistory) profileInstance.trustHistory = {};
+            if (!profileInstance.trustHistory[hostname]) profileInstance.trustHistory[hostname] = [];
 
-            console.log(`[CookieJar] Evaluated ${hostname}: ${currentScoreObj.score}`);
+            profileInstance.trustPoints[hostname] = currentScoreObj;
+            profileInstance.trustHistory[hostname].push(currentScoreObj);
+
+            await browser.storage.local.set({ CookieJar: profileInstance.toJSON() });
         }
 
         const ruleId = getRuleIdForDomain(hostname);
         const lists = profileData.settings?.lists || { whitelist: [], blacklist: [] };
         const apexDomain = getApexDomain(hostname);
+
         const isBlacklisted = lists.blacklist.includes(hostname) || lists.blacklist.includes(apexDomain);
         const isWhitelisted = lists.whitelist.includes(hostname) || lists.whitelist.includes(apexDomain);
 
-        if ((currentScoreObj.score === 0 || (isBlacklisted && !isWhitelisted)) || (profileData.settings?.misc?.autoBlockMaliciousSites >= currentScoreObj.score)) {
+        const autoBlockThreshold = profileData.settings?.misc?.autoBlockMaliciousSites;
+        const shouldBlockByScore = autoBlockThreshold !== undefined && autoBlockThreshold >= currentScoreObj.score;
+
+        if (isWhitelisted) {
+            await unblockDomain(ruleId, hostname, profileData);
+        } else if (isBlacklisted || shouldBlockByScore) {
             await blockDomain(ruleId, hostname, profileData);
         } else {
             await unblockDomain(ruleId, hostname, profileData);
@@ -133,11 +209,45 @@ browser.tabs.onActivated.addListener(async (activeInfo) => {
         const siteData = trustPoints[hostname];
 
         if (siteData) {
-            renderBadge(siteData.score, activeInfo.tabId)
+            renderBadge(siteData.score, activeInfo.tabId);
         } else {
-            browser.action.setBadgeText({ text: "N/A", tabId: activeInfo.tabId })
+            browser.action.setBadgeText({ text: "N/A", tabId: activeInfo.tabId });
         }
     } catch (e) {
-        console.error("[CookieJar] Error handling tab activation: ", e)
+        console.error("[CookieJar] Error handling tab activation: ", e);
+    }
+});
+
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "getDomainInspectorData") {
+        const domain = message.domain;
+        const cleanDomain = getApexDomain ? getApexDomain(domain) : domain;
+
+        const data = domainNetworkData[cleanDomain] || {
+            ip: "Unknown",
+            protocol: "N/A",
+            externalDomains: new Set(),
+            webSockets: new Set(),
+            requestsCount: 0,
+            securityHeaders: null
+        };
+
+        sendResponse({
+            ip: data.ip,
+            protocol: data.protocol,
+            requestsCount: data.requestsCount,
+            externalDomains: Array.from(data.externalDomains || []),
+            webSockets: Array.from(data.webSockets || []),
+            securityHeaders: data.securityHeaders
+        });
+        return true;
+    }
+});
+
+browser.tabs.onRemoved.addListener(() => {
+    const maxDomains = 100;
+    const keys = Object.keys(domainNetworkData);
+    if (keys.length > maxDomains) {
+        keys.slice(0, keys.length - maxDomains).forEach(k => delete domainNetworkData[k]);
     }
 });

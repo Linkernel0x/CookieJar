@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="popup.css">
+    <style>
+        body {
+            padding: 16px;
+            background: var(--bg-base);
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .card {
+            background: var(--bg-card);
+            padding: 14px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            display: block;
+        }
+        .grid-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .info-box {
+            background: var(--bg-card);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .info-box span {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        .info-box strong {
+            font-size: 1rem;
+            color: var(--accent-blue);
+            word-break: break-all;
+        }
+        ul.tags-list {
+            list-style: none;
+            padding: 0;
+            margin-top: 6px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        ul.tags-list li {
+            background: var(--bg-surface);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-bottom: 4px;
+        }
+        details summary {
+            outline: none;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+    <h2 id="inspector-domain" style="color: var(--accent-blue); margin-top: 0">Analysis</h2><span class="text-tag" style="background: var(--accent-green); color: #11111b; font-size: 0.7rem;">Beta</span>
+
+    <div class="grid-info">
+        <div class="info-box"><span>IP Address:</span><strong id="net-ip">Loading...</strong></div>
+        <div class="info-box"><span>Protocol:</span><strong id="net-protocol">Loading...</strong></div>
+        <div class="info-box"><span>Requests:</span><strong id="net-requests">0</strong></div>
+    </div>
+    <details style="cursor: pointer; margin-top: 12px;">
+        <summary style="font-size: 0.85rem; color: #a6adc8;">More IP Info</summary>
+        <div class="grid-info">
+            <div class="info-box"><span>Country:</span><strong id="ip-country">Loading...</strong></div>
+            <div class="info-box"><span>Region:</span><strong id="ip-region">Loading...</strong></div>
+            <div class="info-box"><span>City:</span><strong id="ip-city">Loading...</strong></div>
+            <div class="info-box"><span>Latitude:</span><strong id="ip-latitude">Loading...</strong></div>
+            <div class="info-box"><span>Longitude:</span><strong id="ip-longitude">Loading...</strong></div>
+            <div class="info-box"><span>UTC offset:</span><strong id="ip-offset">Loading...</strong></div>
+            <div class="info-box"><span>ISP:</span><strong id="ip-isp">Loading...</strong></div>
+            <div class="info-box"><span>Reverse:</span><strong id="ip-reverse">Loading...</strong></div>
+            <div class="info-box"><span>Is proxy:</span><strong id="ip-proxy">Loading...</strong></div>
+            <div class="info-box"><span>Is mobile:</span><strong id="ip-mobile">Loading...</strong></div>
+            <div class="info-box"><span>Hosting:</span><strong id="ip-hosting">Loading...</strong></div>
+        </div>
+    </details>
+
+    <div class="card">
+        <h4 style="margin-top: 0;">Domain info</h4>
+        <div class="grid-info">
+            <div class="info-box"><span>Registrar:</span><strong id="rdap-registrar">Loading...</strong></div>
+            <div class="info-box"><span>Abuse Email:</span><strong id="rdap-abuse">Loading...</strong></div>
+            <div class="info-box"><span>Creation date:</span><strong id="rdap-created">Loading...</strong></div>
+            <div class="info-box"><span>Last modified:</span><strong id="rdap-updated">Loading...</strong></div>
+            <div class="info-box"><span>Expiration date:</span><strong id="rdap-expires">Loading...</strong></div>
+            <div class="info-box"><span>Owner:</span><strong id="rdap-owner">Loading...</strong></div>
+        </div>
+
+        <details style="cursor: pointer; margin-bottom: 12px;">
+            <div style="margin-top: 12px;">
+                <span style="font-size: 0.8rem; color: var(--text-muted);">Name Servers (DNS):</span>
+                <ul id="rdap-nameservers" class="tags-list"><li>Loading...</li></ul>
+            </div>
+
+            <div style="margin-top: 12px;">
+                <span style="font-size: 0.8rem; color: var(--text-muted);">Domain status (EPP Status):</span>
+                <ul id="rdap-status" class="tags-list"><li>Loading...</li></ul>
+            </div>
+        </details>
+    </div>
+
+    <div class="card">
+        <h4>Security Headers Checks</h4>
+        <ul id="security-headers" style="list-style: none; padding-left: 0; margin: 8px 0;">
+            <li>Loading headers...</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h4 style="margin-top: 0;">Imported external domains (<span id="ext-count">0</span>)</h4>
+        <ul id="external-domains-list" class="tags-list"><li>No domain found</li></ul>
+    </div>
+
+    <div class="card">
+        <h4 style="margin-top: 0;">WebSocket connections (<span id="ws-count">0</span>)</h4>
+        <ul id="websocket-list" class="tags-list"><li>No active connection</li></ul>
+    </div>
+
+    <button class="btn secondary" id="reload"><i class="fa-solid fa-rotate"></i> Reload parent</button>
+    <script src="../background/profile.js"></script>
+    <script src="../background/helpers.js"></script>
+    <script src="inspector.js"></script>
+</body>
+</html>

@@ -34,6 +34,11 @@ The score is based on multiple external checks, including:
 
 If a site performs poorly across these signals, the score drops and the extension displays a warning.
 
+### Connection details
+From the connection details window a list of information are displayed, such as IP information (location, isp, reverse dns, ...), Domain info (registrar, expiration, creation, ...), etc.
+
+If all dns and ip information are displayed as "Unknown" try pressing the reload button at the bottom. Sometimes dns information can stay as "unknown" or "N/A" , that's because they're not available on rdap.org API.
+
 ### Download Protection
 When enabled, CookieJar can monitor downloads and check them with VirusTotal before they finish.
 
@@ -81,6 +86,8 @@ From the dashboard you can also put domains into one of these two categories:
 
 ### Firefox
 #### Tested on Firefox 153.0.3 (64-bit)
+
+If no signed .xpi is provided in the latest release: 
 
 1. Clone or download this repository.
 2. Open Firefox and navigate to `about:debugging`.

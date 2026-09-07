@@ -206,8 +206,10 @@ async function queryIanaBootstrap(domain) {
 
 function getApexDomain(hostname) {
     const parts = hostname.split('.');
-    if (parts.length <= 2) return hostname;
-    return parts.slice(-2).join('.');
+    if (parts.length > 2) {
+        return parts.slice(-2).join('.')
+    }
+    return hostname;
 }
 
 async function checkUrlScan(hostname, apiKey) {
@@ -443,29 +445,36 @@ async function blockDomain(ruleId, domain, data){
     if (data.trustPoints[domain]) {
         data.trustPoints[domain].timestamp = 0;
     }
-    await browser.declarativeNetRequest.updateDynamicRules({
-        addRules: [
-            {
-                id: ruleId,
-                priority: 1,
-                action: {type: "block"},
-                condition: {
-                    urlFilter: `||${domain}^`,
-                    resourceTypes: ["main_frame", "sub_frame", "script"]
+    try {
+        await browser.declarativeNetRequest.updateDynamicRules({
+            addRules: [
+                {
+                    id: ruleId,
+                    priority: 1,
+                    action: {type: "block"},
+                    condition: {
+                        urlFilter: `||${domain}^`,
+                        resourceTypes: ["main_frame", "sub_frame", "script"]
+                    }
                 }
-            }
-        ],
-        removeRuleIds: [ruleId]
-    })
+            ]
+        });
+    } catch (e) {
+        console.error(`[CookieJar] Error blocking domain ${domain}:`, e);
+    }
 }
 
 async function unblockDomain(ruleId, domain, data){
     if (data.trustPoints[domain]) {
         data.trustPoints[domain].timestamp = 0;
     }
-    await browser.declarativeNetRequest.updateDynamicRules({
-        removeRuleIds: [ruleId]
-    });
+    try {
+        await browser.declarativeNetRequest.updateDynamicRules({
+            removeRuleIds: [ruleId]
+        });
+    } catch (e) {
+        console.warn(`[CookieJar] Rule ${ruleId} not found or already removed:`, e);
+    }
 }
 
 function getRuleIdForDomain(domain) {
@@ -475,4 +484,61 @@ function getRuleIdForDomain(domain) {
         hash |= 0;
     }
     return Math.abs(hash) + 1;
+}
+
+async function getFullDomainDetails(domain) {
+    const apexDomain = getApexDomain(domain);
+    try {
+        const response = await fetch(`https://rdap.org/domain/${apexDomain}`);
+        if (!response.ok) return null;
+
+        const data = await response.json();
+
+        const creationEvent = data.events?.find(e => e.eventAction === "registration" || e.eventAction === "date created");
+        const expirationEvent = data.events?.find(e => e.eventAction === "expiration");
+        const updateEvent = data.events?.find(e => e.eventAction === "last changed" || e.eventAction === "last update");
+
+        let registrar = "N/A";
+        let abuseEmail = "N/A";
+        let owner = "Unknown";
+
+        if (data.entities && Array.isArray(data.entities)) {
+            for (const entity of data.entities) {
+                if (entity.roles?.includes("registrar")) {
+                    registrar = entity.vcardArray?.[1]?.find(v => v[0] === "fn")?.[3] || entity.handle || "N/A";
+
+                    if (entity.entities) {
+                        for (const subEntity of entity.entities) {
+                            if (subEntity.roles?.includes("abuse")) {
+                                abuseEmail = subEntity.vcardArray?.[1]?.find(v => v[0] === "email")?.[3] || "N/A";
+                            }
+                        }
+                    }
+                }
+                if (entity.roles?.includes("registrant")) {
+                    owner = entity.vcardArray?.[1]?.find(v => v[0] === "fn")?.[3] || "N/A";
+                }
+            }
+        }
+
+        const nameServers = data.nameservers ? data.nameservers.map(ns => ns.ldhName) : [];
+
+        const statusCodes = data.status || [];
+
+        return {
+            registrar: registrar,
+            owner: owner,
+            abuseEmail: abuseEmail,
+            createdAt: creationEvent?.eventDate ? new Date(creationEvent.eventDate).toLocaleDateString() : "N/A",
+            expiresAt: expirationEvent?.eventDate ? new Date(expirationEvent.eventDate).toLocaleDateString() : "N/A",
+            updatedAt: updateEvent?.eventDate ? new Date(updateEvent.eventDate).toLocaleDateString() : "N/A",
+            nameServers: nameServers,
+            statusCodes: statusCodes,
+            handle: data.handle || "N/A"
+        }
+
+    } catch (e) {
+        console.warn("[CookieJar] RDAP fetch error:", e);
+        return null;
+    }
 }

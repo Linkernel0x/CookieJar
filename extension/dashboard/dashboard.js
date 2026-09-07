@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     await initStorageExplorer();
     await initListManager();
-    await initHistoryControls(profile);
+    await initHistoryControls();
 });
 
 async function renderTrustGraph(graph, trustPoints = {}) {
@@ -75,7 +75,7 @@ async function renderTrustHighlights(profile) {
         for (let [key, options] of Object.entries(profile.settings.trust)) {
             if (options.enabled) {
                 const li = document.createElement("li");
-                li.textContent = options.apiKey ? `${key} (${options.apiKey})` : key;
+                li.textContent = options.apiKey ? `${key} (✓ Configured)` : key;
                 enabled_modules.appendChild(li);
             }
         }
@@ -484,7 +484,12 @@ function renderExplorerList(itemsToRender) {
                     }
                 } else if (scope === "localStorage" || scope === "sessionStorage") {
                     const tabs = await browser.tabs.query({});
-                    const targetTab = tabs.find(t => t.url.includes(domain));
+                    const targetTab = tabs.find(t => {
+                        try {
+                            const u = new URL(t.url);
+                            return u.hostname === domain || u.hostname.endsWith('.' + domain);
+                        } catch (e) { return false; }
+                    });
                     if (targetTab) {
                         await browser.scripting.executeScript({
                             target: { tabId: targetTab.id },
@@ -517,7 +522,12 @@ function renderExplorerList(itemsToRender) {
                 }
             } else if (scope === "localStorage" || scope === "sessionStorage") {
                 const tabs = await browser.tabs.query({});
-                const targetTab = tabs.find(t => t.url.includes(domain));
+                const targetTab = tabs.find(t => {
+                    try {
+                        const u = new URL(t.url);
+                        return u.hostname === domain || u.hostname.endsWith('.' + domain);
+                    } catch (e) { return false; }
+                });
                 if (targetTab) {
                     await browser.scripting.executeScript({
                         target: { tabId: targetTab.id },
@@ -580,6 +590,7 @@ async function addDomainToList(domain, listType) {
         }
 
         await browser.storage.local.set({ CookieJar: profile.toJSON() });
+        await blockDomain(getRuleIdForDomain(domain), domain, profile);
         renderLists();
     }
 }
@@ -589,6 +600,7 @@ async function removeDomainFromList(domain, listType) {
 
     profile.settings.lists[listType] = profile.settings.lists[listType].filter(d => d !== domain);
     await browser.storage.local.set({ CookieJar: profile.toJSON() });
+    await unblockDomain(getRuleIdForDomain(domain), domain, profile)
     renderLists();
 }
 

@@ -82,23 +82,23 @@
     </style>
 </head>
 <body>
-<header>
-    <select id="storage-scope" class="select-scope">
-        <option value="cookies">Cookies</option>
-        <option value="localStorage">Local Storage</option>
-        <option value="sessionStorage">Session Storage</option>
-        <option value="extensionStorage">Extension Storage</option>
-    </select>
-    <input type="text" id="search-input" class="search-input" placeholder="Search by key/name...">
-    <button id="open-dashboard" class="btn primary" style="width: auto; margin: 0;"><i class="fa-solid fa-gauge"></i></button>
-</header>
+    <header>
+        <select id="storage-scope" class="select-scope">
+            <option value="cookies">Cookies</option>
+            <option value="localStorage">Local Storage</option>
+            <option value="sessionStorage">Session Storage</option>
+            <option value="extensionStorage">Extension Storage</option>
+        </select>
+        <input type="text" id="search-input" class="search-input" placeholder="Search by key/name...">
+        <button id="open-dashboard" class="btn primary" style="width: auto; margin: 0;"><i class="fa-solid fa-gauge"></i></button>
+    </header>
 
-<main id="content">
-    Loading...
-</main>
+    <main id="content">
+        Loading...
+    </main>
 
-<script src="../background/helpers.js"></script>
-<script src="../background/profile.js"></script>
-<script src="cookies.js"></script>
+    <script src="../background/profile.js"></script>
+    <script src="../background/helpers.js"></script>
+    <script src="cookies.js"></script>
 </body>
 </html>
