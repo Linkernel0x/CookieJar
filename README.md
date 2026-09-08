@@ -85,9 +85,9 @@ From the dashboard you can also put domains into one of these two categories:
 ## Installation
 
 ### Firefox
-#### Tested on Firefox 153.0.3 (64-bit)
+#### Tested on Firefox 155.0.1 (64-bit)
 
-If no signed .xpi is provided in the latest release: 
+If no signed `.xpi` is provided in the latest release: 
 
 1. Clone or download this repository.
 2. Open Firefox and navigate to `about:debugging`.
@@ -97,11 +97,7 @@ If no signed .xpi is provided in the latest release:
 ### Note
 This extension relies on browser permissions and external APIs for trust evaluation and malware checks. Some features may require you to provide your own API keys in the settings page.
 
+This extension is still a work in progress and may have bugs or optimization issues.
+
 ## Work in Progress
 CookieJar is currently under occasional development!
-
-Upcoming improvements:
-* better UI polish and refinements
-* improved trust scoring logic
-* more robust handling of edge cases
-* more utility tools for privacy and browser inspection
