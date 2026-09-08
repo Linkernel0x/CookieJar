@@ -1,8 +1,6 @@
 # CookieJar
 
-This is browser extension (developed for Firefox) offers a little set tools to manage online privacy and security. It allows users to view, edit, and delete specific cookies or stored information, as well as a trust score with which CookieJar tries to estimate the site's security and it's fully configurable (each of the external services requires an API key, that must be provided by the user).
-
-It's still a prototype built for HAckClub.
+This is a browser extension (developed for Firefox) that offers a little set of tools to manage online privacy and security. It allows users to view, edit, and delete specific cookies or stored information, as well as a trust score with which CookieJar tries to estimate the site's security. It's also fully configurable (each of the external services requires an API key, that must be provided by the user)
 
 ---
 
@@ -97,7 +95,7 @@ If no signed `.xpi` is provided in the latest release:
 ### Note
 This extension relies on browser permissions and external APIs for trust evaluation and malware checks. Some features may require you to provide your own API keys in the settings page.
 
-This extension is still a work in progress and may have bugs or optimization issues.
+This extension is still a prototype built for hackclub and may have bugs or optimization issues.
 
 ## Work in Progress
 CookieJar is currently under occasional development!
